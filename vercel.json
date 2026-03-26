@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/proxy/kanana",
+      "destination": "/api/kanana"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "source": "/((?!api/|proxy/|mockServiceWorker).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
