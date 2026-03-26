@@ -1,0 +1,101 @@
+// src/components/common/Tooltip.tsx
+import React, { useState, useRef, useEffect, useContext } from 'react';
+import { createPortal } from 'react-dom';
+import clsx from 'clsx';
+import { UIContext } from '@/contexts/UIProvider';
+
+interface TooltipProps {
+    children: React.ReactNode;
+    content: React.ReactNode;
+    position?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-left' | 'bottom-right';
+    delay?: number;
+    className?: string;
+}
+
+export const Tooltip: React.FC<TooltipProps> = ({ 
+    children, 
+    content, 
+    position = 'top', 
+    delay = 200,
+    className
+}) => {
+    const [isVisible, setIsVisible] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const uiContext = useContext(UIContext);
+    const isDark = uiContext?.isDark ?? true;
+    const areTooltipsEnabled = uiContext?.areTooltipsEnabled ?? true;
+
+    const triggerRef = useRef<HTMLDivElement>(null);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+    const updatePosition = () => {
+        if (triggerRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect();
+            let top = 0, left = 0;
+            const offset = 10;
+
+            switch (position) {
+                case 'top': top = rect.top - offset; left = rect.left + rect.width / 2; break;
+                case 'bottom': top = rect.bottom + offset; left = rect.left + rect.width / 2; break;
+                case 'left': top = rect.top + rect.height / 2; left = rect.left - offset; break;
+                case 'right': top = rect.top + rect.height / 2; left = rect.right + offset; break;
+                case 'bottom-left': top = rect.bottom + offset; left = rect.right; break;
+                case 'bottom-right': top = rect.bottom + offset; left = rect.left; break;
+            }
+            setCoords({ top, left });
+        }
+    };
+
+    const show = () => { 
+        if (areTooltipsEnabled && content) {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            timeoutRef.current = setTimeout(() => { updatePosition(); setIsVisible(true); }, delay); 
+        }
+    };
+    
+    const hide = () => { 
+        if (timeoutRef.current) clearTimeout(timeoutRef.current); 
+        setIsVisible(false); 
+    };
+
+    useEffect(() => {
+        if (isVisible) {
+            window.addEventListener('scroll', updatePosition, true);
+            window.addEventListener('resize', updatePosition);
+        }
+        return () => { 
+            window.removeEventListener('scroll', updatePosition, true); 
+            window.removeEventListener('resize', updatePosition); 
+        };
+    }, [isVisible]);
+
+    const tooltipStyles: Record<string, string> = {
+        top: '-translate-x-1/2 -translate-y-full',
+        bottom: '-translate-x-1/2',
+        left: '-translate-x-full -translate-y-1/2',
+        right: '-translate-y-1/2',
+        'bottom-left': '-translate-x-full',
+        'bottom-right': '',
+    };
+
+    return (
+        <div ref={triggerRef} className={clsx("relative inline-block", className)} onMouseEnter={show} onMouseLeave={hide} onMouseDown={hide}>
+            {children}
+            {isVisible && areTooltipsEnabled && createPortal(
+                <div 
+                    className={clsx(
+                        "fixed px-2 py-1 text-[10px] font-mono rounded whitespace-nowrap pointer-events-none backdrop-blur-md shadow-2xl border transition-all duration-150 z-[9999]",
+                        tooltipStyles[position],
+                        isDark 
+                            ? "bg-black/90 text-blue-400 border-blue-500/40" 
+                            : "bg-slate-800 text-white border-slate-700 shadow-lg"
+                    )}
+                    style={{ top: coords.top, left: coords.left }}
+                >
+                    {content}
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+};
