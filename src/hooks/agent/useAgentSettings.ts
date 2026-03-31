@@ -11,7 +11,7 @@ export const useAgentSettings = (onClose: () => void) => {
     const [provider, setProvider] = useState('mock');
     const [apiKey, setApiKey] = useState('');
     const [model, setModel] = useState('');
-    const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI traffic controller.');
+    const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI.');
     const [isLoading, setIsLoading] = useState(false);
 
     const API_URL = '';
