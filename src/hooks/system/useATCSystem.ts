@@ -1,6 +1,7 @@
 // src/hooks/system/useATCSystem.ts
 import { useState, useCallback } from 'react';
 import { Agent, ATCState, LogEntry } from '@/contexts/atcTypes';
+import { ATC_CONFIG } from '@/constants/atcConfig';
 
 export const useATCSystem = () => {
   const [state, setState] = useState<ATCState>({
@@ -14,7 +15,10 @@ export const useATCSystem = () => {
     activeAgentCount: 3,
     overrideSignal: false, 
     latency: 24, 
-    trafficIntensity: 3 
+    trafficIntensity: 3,
+    pendingProposals: [],
+    handoverTarget: null,
+    autonomyLevel: ATC_CONFIG.LEVELS.NORMAL
   });
   
   const [agents, setAgents] = useState<Agent[]>([]);

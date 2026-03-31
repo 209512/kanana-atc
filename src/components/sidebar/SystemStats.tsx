@@ -52,7 +52,7 @@ export const SystemStats = () => {
                 )}>
                     {/* CPU 아이콘 */}
                     <Cpu size={12} className="shrink-0" />
-
+            
                     {/* Congestion 레이블 */}
                     <div className="text-[10px] font-black uppercase tracking-[0.15em] shrink-0">
                         <Tooltip content="Traffic Capacity Management" position="bottom">Congestion</Tooltip>
@@ -72,7 +72,7 @@ export const SystemStats = () => {
                             </motion.span>
                         )}
                     </AnimatePresence>
-
+                    
                     {/* n/10 수치 */}
                     <div className="shrink-0">
                         <Tooltip content={`Active Slots: ${state.trafficIntensity} / 10`} position="bottom-left">
@@ -80,7 +80,7 @@ export const SystemStats = () => {
                                 "text-xs font-mono font-bold cursor-default", 
                                 isDark ? "text-blue-400" : "text-blue-600"
                             )}>
-                                {state.trafficIntensity || 0}/10
+                                {sliderValue|| 0}/10
                             </span>
                         </Tooltip>
                     </div>
@@ -105,7 +105,7 @@ export const SystemStats = () => {
                     </div>
                 </div>
             </div>
-            
+
             {/* Sector Scan Section */}
             <div className="space-y-3 min-w-0 flex flex-col">
                 <div className="flex justify-between items-center min-w-0 px-1 h-5 overflow-hidden">

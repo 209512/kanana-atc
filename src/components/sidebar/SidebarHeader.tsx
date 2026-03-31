@@ -1,13 +1,13 @@
 // src/components/sidebar/SidebarHeader.tsx
 import React from 'react';
 import clsx from 'clsx';
-import { ShieldAlert, Activity, Settings } from 'lucide-react';
+import { ShieldAlert, Activity, Settings, Volume2, VolumeX } from 'lucide-react';
 import { Tooltip } from '@/components/common/Tooltip';
 import { useATC } from '@/hooks/system/useATC';
 import { useUI } from '@/hooks/system/useUI';
 
 export const SidebarHeader = ({ onOpenSettings }: { onOpenSettings: () => void }) => {
-    const { state } = useATC();
+    const { state, isAdminMuted, toggleAdminMute } = useATC();
     const { isDark, setIsDark } = useUI();
     const isHuman = state.holder && state.holder.includes('Human');
     
@@ -32,14 +32,24 @@ export const SidebarHeader = ({ onOpenSettings }: { onOpenSettings: () => void }
                     </div>
                 </div>
             </div>
-            <div className="flex items-center gap-1 min-w-0">
+            <div className="flex items-center gap-0.5">
+                <Tooltip content={isAdminMuted ? "Unmute Audio" : "Mute Audio"} position="bottom">
+                    <button onClick={toggleAdminMute} className={clsx(
+                        "p-2 rounded-md transition-colors",
+                        isAdminMuted ? "text-red-500 bg-red-500/10" : "hover:bg-white/10 text-gray-400"
+                    )}>
+                        {isAdminMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                    </button>
+                </Tooltip>
+                
                 <Tooltip content="Toggle Theme" position="bottom">
-                    <button onClick={() => setIsDark(!isDark)} className="p-2 rounded-md hover:bg-white/10">
+                    <button onClick={() => setIsDark(!isDark)} className="p-2 rounded-md hover:bg-white/10 text-lg">
                         {isDark ? "🌙" : "☀️"}
                     </button>
                 </Tooltip>
-                <Tooltip content="System Settings" position="bottom">
-                    <button onClick={onOpenSettings} className="p-2 rounded-md hover:bg-blue-500/20">
+
+                <Tooltip content="System Settings" position="bottom-left">
+                    <button onClick={onOpenSettings} className="p-2 rounded-md hover:bg-blue-500/20 text-gray-400">
                         <Settings size={16} />
                     </button>
                 </Tooltip>

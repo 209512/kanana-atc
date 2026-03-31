@@ -36,6 +36,9 @@ export const AgentCard = ({
 }: AgentCardProps) => {
     const { playClick } = useATC();
     const { isLocked, isPaused, isForced, isPriority, isOverride } = useAgentLogic(agent, state);
+    const isAiProposed = state.pendingProposals?.some(
+        p => p.targetId === agent.id || p.targetId === agent.uuid
+    ) ?? false;
 
     const filteredLogs = useMemo(() => {
         if (!isSelected) return [];
@@ -70,7 +73,8 @@ export const AgentCard = ({
                         isSelected, 
                         isDark, 
                         overrideSignal: isOverride, 
-                        globalStop: !!state?.globalStop
+                        globalStop: !!state?.globalStop,
+                        isAiProposed
                     }),
                     "p-3 mb-2 group/card cursor-pointer transition-all duration-200 relative border rounded-sm shadow-sm overflow-hidden"
                 )}
@@ -110,6 +114,7 @@ export const AgentCard = ({
                             isPaused={isPaused} 
                             isForced={isForced} 
                             isPriority={isPriority} 
+                            isAiProposed={isAiProposed}
                         />
                         <span className="truncate opacity-60 font-mono text-[9px]">{agent.activity || "IDLE"}</span>
                     </div>

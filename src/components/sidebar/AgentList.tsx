@@ -55,7 +55,7 @@ export const AgentList = () => {
                         className={clsx(
                             "px-4 py-1.5 rounded-full text-[10px] font-black transition-all flex items-center gap-1.5 border shadow-md",
                             state?.globalStop 
-                                ? "bg-red-500 text-white border-red-600 animate-pulse" 
+                                ? "bg-red-500 ring-4 ring-red-500/20 text-white border-red-600 animate-pulse" 
                                 : (isDark 
                                     ? "bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700" 
                                     : "bg-white border-slate-400 text-slate-700 hover:bg-slate-50")

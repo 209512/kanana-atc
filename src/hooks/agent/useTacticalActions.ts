@@ -10,7 +10,7 @@ export const useTacticalActions = () => {
         renameAgent: submitRename,
         terminateAgent: apiTerminate, 
         togglePriority: apiTogglePriority, transferLock, 
-        playClick, playAlert, toggleGlobalStop: apiToggleGlobalStop
+        playClick, playAlert, toggleGlobalStop: apiToggleGlobalStop, markAction
     } = useATC();
     
     const { isDark, sidebarWidth, areTooltipsEnabled } = useUI();
@@ -35,26 +35,19 @@ export const useTacticalActions = () => {
 
     const handleConfirmRename = useCallback(async (id: string) => {
         const trimmedName = newName.trim();
-        const invalidPattern = /[^a-zA-Z0-9\-_\.]/;
+        if (!trimmedName) return handleCancelRename();
 
-        if (invalidPattern.test(trimmedName)) {
-            if (playAlert) playAlert();
-            return;
-        }
-
-        const targetAgent = agents.find((a: Agent) => String(a.uuid || a.id) === String(id));
-        if (!trimmedName || trimmedName === (targetAgent?.displayId || id)) {
-            return handleCancelRename();
-        }
+        markAction(id, 'displayName', trimmedName);
         
         try {
             await submitRename(id, trimmedName);
             setRenamingId(null);
             setNewName('');
         } catch (err) {
+            markAction(id, 'displayName', null);
             if (playAlert) playAlert();
         }
-    }, [newName, agents, submitRename, playAlert, handleCancelRename]);
+    }, [newName, submitRename, markAction, playAlert, handleCancelRename]);
         
     const togglePriority = useCallback((id: string) => {
         apiTogglePriority(id);
