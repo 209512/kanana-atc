@@ -27,6 +27,11 @@
     height: 100vh;
     width: 100vw;
     overflow: hidden; 
+    background: #f8fafc;
+    transition: background-color 0.3s ease;
+  }
+
+  .dark body {
     background: #05090a;
   }
 }
@@ -45,7 +50,7 @@
     background-clip: padding-box;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #64748b;
+    background: #94a3b8;
   }
   .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #475569;
@@ -62,6 +67,31 @@
     pointer-events: none;
     opacity: 0.15;
   }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .grayscale svg line {
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+    animation: strike-through 0.3s forwards ease-out;
+  }
+
+  @keyframes strike-through {
+    to { stroke-dashoffset: 0; }
+  }
+}
+
+.prose strong {
+  color: inherit !important;
+  font-weight: 800;
 }
 
 .font-mono {

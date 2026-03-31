@@ -45,25 +45,17 @@ export const AgentIdentity = ({
         }
     };
 
-    const handleConfirm = async () => {
+    const handleConfirm = () => {
         const trimmedName = newName.trim();
-        if (!trimmedName || trimmedName === (agent.displayId || agent.id)) {
+        if (!trimmedName || trimmedName === (agent.displayName || agent.id)) {
             onCancel();
             return;
         }
-        const isDuplicate = agents?.some((a: Agent) => 
-            a.id !== agent.id && (a.displayId === trimmedName || a.id === trimmedName)
-        );
-        if (isDuplicate) {
+        if (/[^A-Z0-9\-_.]/.test(trimmedName)) {
             triggerError();
             return;
         }
-        try {
-            await renameAgent(agent.id, trimmedName);
-            onConfirm(agent.id);
-        } catch (err) {
-            triggerError();
-        }
+        onConfirm(agent.uuid);
     };
 
     const textStyle = getAgentTextStyle({
