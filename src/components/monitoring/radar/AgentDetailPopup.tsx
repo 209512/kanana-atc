@@ -15,10 +15,10 @@ interface AgentDetailPopupProps {
     position: [number, number, number] | undefined;
     onClose: () => void;
     isDark: boolean;
-    onTerminate: (id: string) => void;
-    onTogglePriority: (id: string, enable: boolean) => void;
-    onTransferLock: (id: string) => void;
-    onTogglePause: (id: string, isPaused: boolean) => void;
+    onTerminate?: (id: string) => void;
+    onTogglePriority?: (id: string, enable: boolean) => void;
+    onTransferLock?: (id: string) => void;
+    onTogglePause?: (id: string, isPaused: boolean) => void;
     isCompact?: boolean;
 }
 
@@ -28,15 +28,19 @@ export const AgentDetailPopup = ({
 }: AgentDetailPopupProps) => {
     const { state } = useATC();
     const { onTogglePause, onTransferLock, togglePriority, terminateAgent } = useTacticalActions();
-
     const { isPaused, isForced, statusLabel, isLocked } = useAgentLogic(agent as Agent, state);
 
     if (!agent || !position) return null;
-
     const verticalOffset = -180; 
 
     return (
-        <Html position={position} center zIndexRange={[100, 0]} pointerEvents="auto" occlude={false}>
+        <Html 
+            position={position} 
+            center 
+            zIndexRange={[100, 0]} 
+            pointerEvents="auto" 
+            occlude={false}
+        >
              <div 
                 className={clsx(
                     "p-4 rounded-lg border shadow-2xl backdrop-blur-xl transition-all duration-300 select-none",
@@ -59,7 +63,10 @@ export const AgentDetailPopup = ({
                         </span>
                         {isPaused && <Pause size={10} className="animate-pulse shrink-0" style={{ color: LOG_LEVELS.system.color }} />}
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="hover:text-red-500 transition-colors ml-2 shrink-0 p-1 cursor-pointer">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onClose(); }} 
+                        className="hover:text-red-500 transition-colors ml-2 shrink-0 p-1 cursor-pointer"
+                    >
                         <X size={16} />
                     </button>
                 </div>
