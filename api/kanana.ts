@@ -2,7 +2,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // 1. CORS 및 보안 검증
   const origin = (req.headers.origin as string) || "";
   const isAllowed = 
     !origin || 
@@ -37,6 +36,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const { messages } = req.body;
+    const finalMessages = messages && messages.length > 0 
+      ? messages 
+      : [{ role: "system", content: "You are Kanana-O, a tactical ATC AI." }];
     
     let baseUrl = apiEndpoint.replace(/\/$/, "");
     if (!baseUrl.endsWith("/v1")) {
@@ -54,21 +56,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       body: JSON.stringify({
         model: "kanana-o",
-        messages: [
-          { 
-            role: "system", 
-            content: `You are a professional ATC AI Controller. 
-            If an urgent action is needed, include one of these tags in your response:
-            - [ACTION:PAUSE:uuid] to suspend a drone.
-            - [ACTION:PRIORITY:uuid] to give priority.
-            Keep insights brief and tactical.` 
-          },
-          ...(messages || [])
-        ],
+        messages: finalMessages,
         modalities: ["text"], // 음성 활성 시 ["text", "audio"]로 변경
         stream: false 
       }),
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(30000)
     });
 
     const data = await kakaoResponse.json();
