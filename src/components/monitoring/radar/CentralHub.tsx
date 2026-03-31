@@ -25,12 +25,12 @@ export const CentralHub = ({ isLocked, isOverride, holder, isDark, agents, isAiM
         if (isLocked) return LOG_LEVELS.success.color;
         return LOG_LEVELS.info.color;
     }, [isOverride, isAiMode, isLocked]);
-
+    
     const holderDisplayName = useMemo(() => {
         if (!holder) return null;
-        if (holder === 'Human-Operator') return 'HUMAN';
-        const agent = agents.find(a => a.id === holder);
-        return agent?.displayId || agent?.id || holder.split('-')[0];
+        if (holder === 'USER' || holder === 'Human-Operator') return 'HUMAN';
+        const agent = agents.find(a => a.uuid === holder || a.id === holder);
+        return agent?.displayName || agent?.displayId || agent?.id || holder.split('-')[0];
     }, [holder, agents]);
 
     useFrame(() => {
@@ -63,7 +63,21 @@ export const CentralHub = ({ isLocked, isOverride, holder, isDark, agents, isAiM
                         </div>
                     )}
                     <div 
-                        className={clsx("font-bold tracking-widest opacity-60", isAiMode && "text-sky-400")}
+                        className={clsx(
+                            "font-black tracking-tighter whitespace-nowrap transition-all duration-300",
+                            "text-[10px] uppercase", // 대문자로 고정하여 정갈함 유지
+                            // 1. 기본 가독성을 위한 강력한 텍스트 그림자 (Shadow)
+                            "drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]", 
+                            isAiMode ? (
+                                // 2. AI 모드: 하늘색 글씨 + 네온 글로우 효과
+                                "text-sky-400 shadow-sky-500/50 brightness-125 scale-110"
+                            ) : (
+                                // 3. 일반 모드: 흰색(혹은 다크모드 대응색) + 대비 강화
+                                isDark ? "text-white/90" : "text-black/90"
+                            )
+                        )}
+                        // 인라인 스타일로 더 정밀한 외곽선(Text Stroke) 효과 추가
+                        style={{ textShadow: '0px 0px 4px rgba(0,0,0,0.9)' }}
                     >
                         {isAiMode ? "KANANA-O" : "CORE"}
                     </div>
