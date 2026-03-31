@@ -2,63 +2,77 @@
 import React from 'react';
 import { Radar } from '@/components/monitoring/radar';
 import { ControlTower } from '@/components/layout/ControlTower';
+import { ProposalBanner } from '@/components/command/ProposalBanner';
+import { CommandCenter } from '@/components/command/CommandCenter';
+import { MousePointer2, Move, ZoomIn } from 'lucide-react';
 import clsx from 'clsx';
 import { useATC } from '@/hooks/system/useATC';
 import { useUI } from '@/hooks/system/useUI';
 
 export const Dashboard = () => {
   const { state } = useATC();
-  const { isDark, viewMode } = useUI();
+  const { isDark, viewMode, sidebarWidth } = useUI();
 
   return (
     <main className={clsx(
-        "flex-1 min-w-0 relative flex flex-col h-full overflow-hidden transition-colors duration-500",
+        "relative w-full h-full overflow-hidden transition-colors duration-500",
         isDark ? "bg-[#050505]" : "bg-slate-100"
     )}>
-      {/* 상단 시스템 정보 */}
-      <div className="absolute top-4 left-6 z-10 pointer-events-none select-none">
-        <h1 className={clsx("text-4xl font-black tracking-tighter uppercase transition-colors duration-500", 
-          isDark ? "text-white/30" : "text-slate-900/30"
-        )}>
-          ATC // <span className="text-red-500">TRAFFIC</span>
+      {/* 1. 최하단 배경: 레이더 (Z-0) */}
+      <div className="absolute inset-0 z-0">
+        <Radar isMainView={true} key={isDark ? 'dark' : 'light'} /> 
+      </div>
+
+      {/* 2. 시스템 HUD (Z-10) */}
+      <div className="absolute top-4 left-6 z-10 pointer-events-none select-none opacity-30">
+        <h1 className={clsx("text-4xl font-black tracking-tighter uppercase", isDark ? "text-white" : "text-slate-900")}>
+          KANANA-ATC // <span className="text-red-500">TRAFFIC</span>
         </h1>
-        <div className="flex items-center gap-3 mt-1 opacity-60 font-mono text-[10px]">
-          <span className={clsx("w-2 h-2 rounded-full animate-pulse", 
-            state.overrideSignal ? "bg-red-500" : "bg-emerald-500"
-          )}></span>
-          <span className="font-bold uppercase">System: {state.overrideSignal ? "Override Active" : "Nominal"}</span>
-          <span className="opacity-30">|</span>
+        <div className="flex items-center gap-3 mt-1 font-mono text-[10px]">
+          <span className="font-bold">System: {state.overrideSignal ? "Override" : "Nominal"}</span>
           <span>LAT: {state.latency}ms</span>
         </div>
       </div>
 
-      {/* 레이더 캔버스 영역 */}
-      <div className="flex-1 w-full h-full relative z-[1]">
-        {viewMode === 'detached' && (
-          <div className={clsx(
-            "absolute inset-0 transition-opacity duration-500 pointer-events-auto",
-            "opacity-100"
-          )}>
-            <Radar isMainView={true} key={isDark ? 'dark-radar' : 'light-radar'} /> 
-          </div>
-        )}
-
-        {/* 대기 모드 오버레이: attached 모드일 때만 활성화 */}
-        {viewMode === 'attached' && (
-          <div className={clsx(
-            "absolute inset-0 flex flex-col items-center justify-center font-mono transition-all duration-500 bg-black/60 backdrop-blur-sm z-20",
-            "opacity-100"
-          )}>
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-              <span className="text-blue-400 font-bold tracking-[0.2em] animate-pulse uppercase">Radar Data Externalized</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 전역 HUD */}
+      {/* 3. 모니터링 창들 (Z-30): TerminalLog, TacticalPanel 등 */}
       <ControlTower />
+
+      {/* 4. 인터랙티브 UI 레이어 (Z-40): 가이드 및 입력창 */}
+      <div 
+        className="absolute inset-y-0 left-0 z-40 transition-all duration-300 pointer-events-none"
+        style={{ width: `calc(100vw - ${sidebarWidth}px)` }}
+      >
+        {/* 우측 상단 조작 가이드 */}
+        <div className="absolute top-4 right-4 flex flex-col gap-2">
+            <div className={clsx(
+                "flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md text-[9px] font-mono font-bold transition-all pointer-events-auto", 
+                isDark ? "bg-black/40 border-white/10 text-white/60" : "bg-white/60 border-black/5 text-black/60"
+            )}>
+                <div className="flex items-center gap-1.5 border-r border-current pr-2">
+                    <MousePointer2 size={10} className="text-blue-500" />
+                    <span>L-CLICK: SELECT</span>
+                </div>
+                <div className="flex items-center gap-1.5 border-r border-current pr-2">
+                    <ZoomIn size={10} className="text-emerald-500" />
+                    <span>SCROLL: ZOOM</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <Move size={10} className="text-purple-500" />
+                    <span>R-CLICK: PAN</span>
+                </div>
+            </div>
+        </div>
+
+        {/* 중앙 하단: 배너 및 커맨드센터 */}
+        <div className="absolute inset-x-0 bottom-8 flex flex-col items-center gap-4">
+           <div className="pointer-events-auto">
+             <ProposalBanner />
+           </div>
+           <div className="w-full flex justify-center pointer-events-auto">
+             <CommandCenter />
+           </div>
+        </div>
+      </div>
     </main>
   );
 };

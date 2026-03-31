@@ -16,7 +16,7 @@ async function enableMocking() {
     return worker.start({
       onUnhandledRequest(req, print) {
         const url = req.url.toString();
-        if (url.includes('/api/kanana') || url.includes('vercel.app/api')) {
+        if (url.includes('/api/kanana') || url.includes('/proxy/kanana')) {
           return;
         }
         print.warning();
