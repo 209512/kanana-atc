@@ -1,22 +1,27 @@
 // src/mocks/handlers.ts
 import { http, passthrough, HttpResponse } from 'msw';
 import { v4 as uuidv4 } from 'uuid';
-import { simulator, CONSTANTS } from './simulator';
+import { simulator } from './simulator';
+import { ATC_CONFIG, ATCColor } from '@/constants/atcConfig';
 
-const CONFIG = {
-  STREAM_INTERVAL: 100,
-  BASE_URL: '/api'
-};
-
-const createApiRegExp = (path: string) => {
-  const cleanPath = path
-    .replace(':uuid', '[^/]+')      
-    .replace('.+', '[^/]+')         
-    .replace(/\/$/, '');            
-  return new RegExp(`.*${CONFIG.BASE_URL}/${cleanPath}$`);
-};
+const { SIMULATOR, LOG_MSG } = ATC_CONFIG;
 
 let isInitialized = false;
+
+/**
+ * AI가 보낸 ID가 DisplayName(예: Agent-1)일 경우 실제 UUID로 변환해주는 유틸리티
+ */
+const resolveUuid = (idOrName: string): string => {
+  // 1. 이미 유효한 UUID인 경우 그대로 반환
+  if (simulator.agents.has(idOrName)) return idOrName;
+  
+  // 2. DisplayName으로 찾기 (대소문자 구분 없이)
+  const found = Array.from(simulator.agents.values()).find(
+    (a) => a.displayName.toLowerCase() === idOrName.toLowerCase() || a.id === idOrName
+  );
+  
+  return found ? found.uuid : idOrName;
+};
 
 const getOrbitPosition = (seed: number, activeTime: number, index: number, isPaused: boolean): [number, number, number] => {
   const radius = 5 + (index % 3) * 2.8;
@@ -32,12 +37,14 @@ export const handlers = [
   http.all('*/proxy/kanana', () => passthrough()),
 
   // 스트림 핸들러
-  http.get(createApiRegExp('stream'), () => {
+  http.get('*/api/stream', () => {
     isInitialized = true;
     const encoder = new TextEncoder();
+    let intervalId: any;
+    
     return new HttpResponse(new ReadableStream({
       start(controller) {
-        const interval = setInterval(() => {
+        intervalId = setInterval(() => {
           simulator.update();
           const now = Date.now();
           const agentList = Array.from(simulator.agents.values());
@@ -45,6 +52,7 @@ export const handlers = [
             const isPriority = simulator.state.priorityAgents.includes(agent.uuid);
             const isPausedEffective = agent.isPaused || simulator.state.globalStop;
             const isLocked = simulator.state.holder === agent.uuid;
+            
             let effectiveActiveTime: number;
             const startTime = simulator.startTimes.get(agent.uuid) || now;
             if (isPausedEffective) {
@@ -53,12 +61,24 @@ export const handlers = [
               effectiveActiveTime = now - startTime;
               lastActiveTimes.set(agent.uuid, effectiveActiveTime);
             }
+
             let status: any = 'idle';
-            let color = CONSTANTS.COLOR_DEFAULT;
-            if (simulator.state.overrideSignal) { status = 'emergency'; color = CONSTANTS.COLOR_OVERRIDE; }
-            else if (isPausedEffective) { status = 'paused'; color = CONSTANTS.COLOR_PAUSED; }
-            else if (isLocked) { status = 'active'; color = CONSTANTS.COLOR_LOCKED; }
-            else if (isPriority) { status = 'waiting'; color = CONSTANTS.COLOR_PRIORITY; }
+
+            let color: ATCColor = SIMULATOR.COLORS.DEFAULT;
+            if (simulator.state.overrideSignal) { 
+              status = 'emergency'; 
+              color = SIMULATOR.COLORS.OVERRIDE; 
+            } else if (isPausedEffective) { 
+              status = 'paused'; 
+              color = SIMULATOR.COLORS.PAUSED; 
+            } else if (isLocked) { 
+              status = 'active'; 
+              color = SIMULATOR.COLORS.LOCKED; 
+            } else if (isPriority) { 
+              status = 'waiting'; 
+              color = SIMULATOR.COLORS.PRIORITY; 
+            }
+
             return {
               ...agent,
               status, color, isPaused: !!agent.isPaused, priority: isPriority,
@@ -66,23 +86,102 @@ export const handlers = [
               metrics: { ts: '0.1s', lat: '12ms', tot: '0.5s', load: '15%' }
             };
           });
+
           const aliveUids = agentList.filter(a => !a.isPaused && !simulator.state.globalStop).map(a => a.uuid);
           const payload = {
-            state: { ...simulator.state, activeAgentCount: agentList.length, trafficIntensity: simulator.state.trafficIntensity,
+            state: { 
+              ...simulator.state, 
+              activeAgentCount: agentList.length,
               waitingAgents: aliveUids.filter(id => id !== simulator.state.holder),
-              logs: [...simulator.state.logs], timestamp: now }, 
+              timestamp: now 
+            }, 
             agents: agents
           };
-          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)); } catch (e) { clearInterval(interval); }
-        }, CONFIG.STREAM_INTERVAL);
-        return () => clearInterval(interval);
+          try { 
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)); 
+          } catch (e) { 
+            clearInterval(intervalId); 
+          }
+        }, SIMULATOR.STREAM_INTERVAL);
+      },
+      cancel() {
+        if (intervalId) clearInterval(intervalId);
       }
     }), { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
   }),
 
+  // AI 일괄 액션 처리 핸들러 (resolveUuid 적용)
+  http.post('*/api/actions/bulk', async ({ request }) => {
+    const { actions } = await request.json() as { actions: any[] };
+    
+    if (!actions || !Array.isArray(actions)) {
+      return HttpResponse.json({ success: false }, { status: 400 });
+    }
+
+    actions.forEach(action => {
+      const { action: type, targetId: rawTargetId, value } = action;
+      if (!rawTargetId && !['STOP', 'START', 'OVERRIDE', 'RELEASE'].includes(type)) return;
+
+      // 입력받은 ID를 실제 UUID로 변환
+      const targetId = resolveUuid(rawTargetId);
+
+      switch(type) {
+        case 'PAUSE': 
+          simulator.updateAgent(targetId, { isPaused: true }); 
+          break;
+        case 'RESUME': 
+          simulator.updateAgent(targetId, { isPaused: false }); 
+          break;
+        case 'PRIORITY': 
+          if (simulator.agents.has(targetId) && !simulator.state.priorityAgents.includes(targetId)) {
+            simulator.state.priorityAgents = [...simulator.state.priorityAgents, targetId];
+          }
+          break;
+        case 'REVOKE': 
+          simulator.state.priorityAgents = simulator.state.priorityAgents.filter(id => id !== targetId);
+          break;
+        case 'TRANSFER':
+          simulator.state.forcedCandidate = targetId;
+          simulator.state.holder = null;
+          simulator.lockExpiry = Date.now() + SIMULATOR.TRANSFER_DELAY;
+          break;
+        case 'TERMINATE':
+          simulator.agents.delete(targetId);
+          simulator.state.priorityAgents = simulator.state.priorityAgents.filter(u => u !== targetId);
+          if (simulator.state.holder === targetId) simulator.state.holder = null;
+          break;
+        case 'RENAME':
+          if (value) simulator.updateAgent(targetId, { displayName: String(value) });
+          break;
+        case 'SCALE': 
+          if (value !== undefined && value !== null) {
+            simulator.updateState({ trafficIntensity: Number(value) });
+          }
+          break;
+        case 'STOP': 
+          simulator.state.globalStop = true; 
+          break;
+        case 'START': 
+          simulator.state.globalStop = false; 
+          break;
+        case 'OVERRIDE':
+          simulator.state.overrideSignal = true;
+          simulator.state.holder = 'USER';
+          break;
+        case 'RELEASE':
+          simulator.state.overrideSignal = false;
+          simulator.state.holder = null;
+          break;
+      }
+    });
+
+    return HttpResponse.json({ success: true });
+  }),
+  
   // 에이전트 스케일링
-  http.post(createApiRegExp('agents/scale'), async ({ request }) => {
+  http.post('*/api/agents/scale', async ({ request }) => {
     const { count } = await request.json() as any;
+    simulator.updateState({ trafficIntensity: count });
     const currentAgents = Array.from(simulator.agents.values());
     const currentCount = currentAgents.length;
     if (count > currentCount) {
@@ -94,51 +193,58 @@ export const handlers = [
       }
     } else if (count < currentCount) {
       const keys = Array.from(simulator.agents.keys());
-      for (let i = 0; i < (currentCount - count); i++) {
+      const removeCount = currentCount - count;
+
+      for (let i = 0; i < removeCount; i++) {
         const id = keys[keys.length - 1 - i];
         const agent = simulator.agents.get(id);
-        if (agent) simulator.addLog(id, `❌ TERMINATING: [${agent.displayName}]`, "error");
-        simulator.agents.delete(id);
-        simulator.state.priorityAgents = simulator.state.priorityAgents.filter(uid => uid !== id);
-        lastActiveTimes.delete(id);
+        
+        if (agent) {
+          const deletedName = agent.displayName;
+          simulator.addLog("SYSTEM", LOG_MSG.TERMINATING(deletedName), "error", deletedName);
+          
+          simulator.agents.delete(id);
+          simulator.state.priorityAgents = simulator.state.priorityAgents.filter(uid => uid !== id);
+          lastActiveTimes.delete(id);
+          
+          if (simulator.state.holder === id) {
+            simulator.state.holder = null;
+          }
+        }
       }
     }
-    simulator.state.trafficIntensity = count;
-    simulator.state.activeAgentCount = simulator.agents.size;
-    if (isInitialized) simulator.addLog("SYSTEM", `🚀 TRAFFIC_SCALED: ${simulator.agents.size}`, "system");
-    return HttpResponse.json({ success: true });
+    return HttpResponse.json({ success: true, count });
   }),
 
   // 일시정지 제어
-  http.post(createApiRegExp('agents/:uuid/pause'), async ({ request }) => {
+  http.post('*/api/agents/:uuid/pause', async ({ request, params }) => {
     const { pause } = await request.json() as any;
-    const urlParts = request.url.split('/');
-    const uuid = urlParts[urlParts.length - 2];
-    if (simulator.updateAgent(uuid, { isPaused: pause })) {
+    const { uuid } = params;
+    if (simulator.updateAgent(uuid as string, { isPaused: pause })) {
       if (pause && simulator.state.holder === uuid) {
         simulator.state.holder = null;
-        simulator.addLog(uuid, "🔓 Lock Released (Paused)", "info");
+        simulator.addLog(uuid as string, LOG_MSG.LOCK_RELEASED_PAUSED, "info");
       }
-      simulator.addLog(uuid, pause ? "⏸️ SUSPENDED" : "▶️ RESUMED", "system");
+      simulator.addLog(uuid as string, pause ? LOG_MSG.SUSPENDED : LOG_MSG.RESUMED, "system");
       return HttpResponse.json({ success: true });
     }
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
 
   // 우선순위 제어
-  http.post(createApiRegExp('agents/:uuid/priority'), async ({ request }) => {
+  http.post('*/api/agents/:uuid/priority', async ({ request, params }) => {
     const { enable } = await request.json() as any;
-    const urlParts = request.url.split('/');
-    const uuid = urlParts[urlParts.length - 2];
-    if (simulator.agents.has(uuid)) {
+    const { uuid } = params;
+    const targetId = uuid as string;
+    if (simulator.agents.has(targetId)) {
       if (enable) {
-        if (!simulator.state.priorityAgents.includes(uuid)) {
-          simulator.state.priorityAgents = [...simulator.state.priorityAgents, uuid];
-          simulator.addLog(uuid, "⭐ Priority Granted", "success");
+        if (!simulator.state.priorityAgents.includes(targetId)) {
+          simulator.state.priorityAgents = [...simulator.state.priorityAgents, targetId];
+          simulator.addLog(targetId, LOG_MSG.PRIORITY_GRANTED, "success");
         }
       } else {
-        simulator.state.priorityAgents = simulator.state.priorityAgents.filter(uid => uid !== uuid);
-        simulator.addLog(uuid, "⭐ Priority Revoked", "warn");
+        simulator.state.priorityAgents = simulator.state.priorityAgents.filter(uid => uid !== targetId);
+        simulator.addLog(targetId, LOG_MSG.PRIORITY_REVOKED, "warn");
       }
       return HttpResponse.json({ success: true });
     }
@@ -146,95 +252,109 @@ export const handlers = [
   }),
 
   // 이름 변경
-  http.post(createApiRegExp('agents/:uuid/rename'), async ({ request }) => {
+  http.post('*/api/agents/:uuid/rename', async ({ params, request }) => {
+    const { uuid } = params;
     const { newName } = await request.json() as any;
-    const urlParts = request.url.split('/');
-    const uuid = urlParts[urlParts.length - 2];
-    const agent = simulator.agents.get(uuid);
-    if (agent && agent.displayName !== newName) { 
-      simulator.updateAgent(uuid, { displayName: newName });
-      simulator.addLog(uuid, `📝 CALLSIGN_UPDATE: ${newName}`, 'system');
+    const targetId = String(uuid);
+    const success = simulator.updateAgent(targetId, { displayName: newName });
+    if (success) {
+      simulator.addLog(targetId, LOG_MSG.CALLSIGN_REV(newName), 'system');
+      return HttpResponse.json({ success: true, id: targetId, displayName: newName });
     }
-    return HttpResponse.json({ success: true });
+    return HttpResponse.json({ success: false }, { status: 404 });
   }),
-  
+
   // 에이전트 설정 (GET)
-  http.get(createApiRegExp('agents/:uuid/config'), ({ request }) => {
-    const urlParts = request.url.split('/');
-    const uuid = urlParts[urlParts.length - 2];
-    const agent = simulator.agents.get(uuid);
-    return HttpResponse.json({ success: true, provider: 'mock', model: agent?.model || 'kanana-o', systemPrompt: 'You are a professional ATC AI Controller.' });
+  http.get('*/api/agents/:uuid/config', ({ params }) => {
+    const { uuid } = params;
+    const agent = simulator.agents.get(uuid as string);
+    if (agent) {
+      return HttpResponse.json({ 
+        success: true, 
+        provider: agent.provider, 
+        model: agent.model, 
+        systemPrompt: agent.systemPrompt 
+      });
+    }
+    return HttpResponse.json({ success: false }, { status: 404 });
   }),
 
   // 글로벌 정지
-  http.post(createApiRegExp('stop'), async ({ request }) => {
+  http.post('*/api/stop', async ({ request }) => {
     const { enable } = await request.json() as any;
     simulator.state.globalStop = enable;
-    simulator.addLog("SYSTEM", enable ? "🚨 Global stop Enabled" : "✅ Global stop Disabled", "system");
+    simulator.addLog("USER", enable ? LOG_MSG.GLOBAL_STOP : LOG_MSG.GLOBAL_START, "system");
     return HttpResponse.json({ success: true });
   }),
 
   // 비상 오버라이드
-  http.post(createApiRegExp('override'), () => { 
+  http.post('*/api/override', () => { 
     simulator.state.overrideSignal = true; 
-    simulator.state.holder = 'Human (Admin)';
-    simulator.addLog("OPERATOR", "🚨 EMERGENCY OVERRIDE", "critical");
+    simulator.state.holder = 'USER';
+    simulator.addLog("USER", LOG_MSG.EMERGENCY_OVERRIDE, "critical");
     return HttpResponse.json({ success: true }); 
   }),
 
   // 오버라이드 해제
-  http.post(createApiRegExp('release'), () => { 
+  http.post('*/api/release', () => { 
     simulator.state.overrideSignal = false; 
     simulator.state.holder = null;
-    simulator.addLog("OPERATOR", "✅ OVERRIDE RELEASED", "info");
+    simulator.addLog("USER", LOG_MSG.OVERRIDE_RELEASED, "info");
     return HttpResponse.json({ success: true }); 
   }),
 
   // 에이전트 제거
-  http.delete(createApiRegExp('agents/.+'), ({ request }) => { 
-    const uuid = request.url.split('/').pop() || "";
-    const agent = simulator.agents.get(uuid);
+  http.delete('*/api/agents/:uuid', ({ params }) => { 
+    const { uuid } = params;
+    const targetId = String(uuid);
+    const agent = simulator.agents.get(targetId);
+    
     if (agent) {
-      simulator.addLog(uuid, `❌ TERMINATING: [${agent.displayName}]`, "error");
-      simulator.agents.delete(uuid); 
-      simulator.state.priorityAgents = simulator.state.priorityAgents.filter(u => u !== uuid);
-      lastActiveTimes.delete(uuid);
-      const currentSize = simulator.agents.size;
-      simulator.state.activeAgentCount = currentSize;
-      simulator.state.trafficIntensity = currentSize;
+      const deletedName = agent.displayName;
+      simulator.addLog("SYSTEM", LOG_MSG.TERMINATING(deletedName), "error", deletedName);
+      simulator.agents.delete(targetId); 
+      simulator.startTimes.delete(targetId);
+      lastActiveTimes.delete(targetId);
+      
+      simulator.state.priorityAgents = simulator.state.priorityAgents.filter(u => u !== targetId);
+      if (simulator.state.holder === targetId) simulator.state.holder = null;
+      if (simulator.state.forcedCandidate === targetId) simulator.state.forcedCandidate = null;
+
+      simulator.state.activeAgentCount = simulator.agents.size;
+      return HttpResponse.json({ success: true });
     }
-    return HttpResponse.json({ success: true }); 
+    return HttpResponse.json({ success: true });
   }),
 
   // 강제 할당
-  http.post(createApiRegExp('agents/:uuid/transfer-lock'), ({ request }) => { 
-    const urlParts = request.url.split('/');
-    const uuid = urlParts[urlParts.length - 2];
-    simulator.state.forcedCandidate = uuid; 
+  http.post('*/api/agents/:uuid/transfer-lock', ({ params }) => { 
+    const { uuid } = params;
+    const targetId = String(uuid);
+    
+    simulator.state.forcedCandidate = targetId; 
     simulator.state.holder = null;
-    simulator.addLog(uuid, `⚡ FORCE_TRANSFER_INITIATED`, "system");
+    simulator.lockExpiry = Date.now() + SIMULATOR.TRANSFER_DELAY;
+    
+    simulator.addLog(targetId, LOG_MSG.FORCE_TRANSFER, "system");
     return HttpResponse.json({ success: true }); 
-  }),
-  
+}),
+
   // 우선순위 순서 업데이트
-  http.post(createApiRegExp('agents/priority-order'), async ({ request }) => {
+  http.post('*/api/agents/priority-order', async ({ request }) => {
     const { order } = await request.json() as any;
-    const oldOrder = simulator.state.priorityAgents;
-    if (JSON.stringify(oldOrder) === JSON.stringify(order)) return HttpResponse.json({ success: true });
     simulator.state.priorityAgents = order;
     const names = order.map((id: string) => simulator.agents.get(id)?.displayName || id).join(' > ');
-    simulator.addLog('POLICY', `📑 Priority Sequence Updated: [ ${names} ]`, 'info');
+    simulator.addLog('POLICY', LOG_MSG.PRIORITY_UPDATED(names), 'info');
     return HttpResponse.json({ success: true });
   }),
 
   // 에이전트 설정 업데이트 (POST)
-  http.post(createApiRegExp('agents/:uuid/config'), async ({ request }) => {
+  http.post('*/api/agents/:uuid/config', async ({ params, request }) => {
     const body = await request.json() as any;
-    const urlParts = request.url.split('/');
-    const uuid = urlParts[urlParts.length - 2];
-    if (simulator.agents.has(uuid)) {
-      simulator.updateAgent(uuid, body.config);
-      simulator.addLog(uuid, "⚙️ CONFIG_UPDATED", "success");
+    const { uuid } = params;
+    if (simulator.agents.has(uuid as string)) {
+      simulator.updateAgent(uuid as string, body.config);
+      simulator.addLog(uuid as string, LOG_MSG.CONFIG_UPDATED, "success");
     }
     return HttpResponse.json({ success: true });
   }),
