@@ -1,6 +1,16 @@
 // src/contexts/atcTypes.ts
 import { LogType } from '@/utils/logStyles';
 
+export interface AIProposal {
+  id: string;
+  action: 'PAUSE' | 'RESUME' | 'PRIORITY' | 'REVOKE' | 'TRANSFER' | 'RENAME'
+  | 'TERMINATE' | 'STOP' | 'START' | 'OVERRIDE' | 'RELEASE' | 'SCALE';
+  targetId?: string;
+  value?: any;
+  reason: string;
+  timestamp: number;
+}
+
 export interface LogEntry {
   id: string;
   agentId?: string;
@@ -44,15 +54,7 @@ export interface ATCState {
   overrideSignal: boolean; 
   latency: number;
   trafficIntensity: number;
-}
-
-export interface AgentMeta {
-  isLocked: boolean;
-  isWaiting: boolean;
-  isPriority: boolean;
-  isForced: boolean;
-  isPaused: boolean;
-  statusLabel: string;
-  themeColor: string;
-  glowIntensity: number;
+  pendingProposals: AIProposal[];
+  handoverTarget: string | null;
+  autonomyLevel: number;
 }
