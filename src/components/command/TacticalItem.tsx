@@ -7,9 +7,11 @@ import { AgentStatusBadge } from '@/components/common/AgentStatusBadge';
 import { AgentActionButtons } from '@/components/common/AgentActionButtons';
 import { AgentIdentity } from '@/components/agent/AgentIdentity';
 import { getAgentCardStyle } from '@/utils/agentStyles';
+import { Agent, ATCState } from '@/contexts/atcTypes';
 
 interface Props {
-    agent: any;
+    agent: Agent;
+    state: ATCState;
 }
 
 export const TacticalItem = memo(({ agent }: Props) => {
@@ -20,6 +22,9 @@ export const TacticalItem = memo(({ agent }: Props) => {
     } = useTacticalActions();
 
     const { isLocked, isPaused, isForced, isPriority, isOverride } = useAgentLogic(agent, state);
+    const isAiProposed = state.pendingProposals?.some(
+        p => p.targetId === agent.id || p.targetId === agent.displayId || p.targetId === agent.uuid
+    ) ?? false;
 
     return (
         <div className={clsx(
@@ -31,8 +36,10 @@ export const TacticalItem = memo(({ agent }: Props) => {
                 isSelected: false, 
                 isDark, 
                 overrideSignal: isOverride, 
-                globalStop: !!state.globalStop
+                globalStop: !!state.globalStop,
+                isAiProposed
             }),
+            isAiProposed && "ring-2 ring-sky-500/50",
             "p-2 group relative transition-all duration-200 border rounded-sm mb-1 overflow-hidden",
             isLocked && "ring-1 ring-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.1)]"
         )}>
@@ -56,6 +63,7 @@ export const TacticalItem = memo(({ agent }: Props) => {
                         onTogglePause={onTogglePause}
                         onTerminate={terminateAgent}
                         onTransferLock={onTransferLock}
+                        isAiProposed={isAiProposed}
                         tooltipPosition="left"
                     />
                 </div>
@@ -82,11 +90,11 @@ export const TacticalItem = memo(({ agent }: Props) => {
     return (
         prev.agent.id === next.agent.id &&
         prev.agent.status === next.agent.status &&
-        prev.agent.activity === next.agent.activity &&
         prev.agent.priority === next.agent.priority &&
         prev.agent.displayId === next.agent.displayId &&
-        (prev as any).state?.holder === (next as any).state?.holder &&
-        (prev as any).state?.globalStop === (next as any).state?.globalStop &&
-        (prev as any).state?.forcedCandidate === (next as any).state?.forcedCandidate
+        prev.state?.pendingProposals === next.state?.pendingProposals &&
+        prev.state?.holder === next.state?.holder &&
+        prev.state?.globalStop === next.state?.globalStop &&
+        prev.state?.forcedCandidate === next.state?.forcedCandidate
     );
 });
