@@ -13,21 +13,35 @@ interface AgentActionButtonsProps {
     onTogglePause: (uuid: string, isPaused: boolean) => void; 
     onTerminate: (uuid: string) => void;
     onTransferLock: (uuid: string) => void;
+    onStartRename?: (uuid: string) => void;
     layout?: 'row' | 'compact';
     showLabels?: boolean;
     tooltipPosition?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-left' | 'bottom-right';
+    isAiProposed?: boolean;
 }
 
-export const RenameButton = ({ onClick, className }: { onClick: (e: React.MouseEvent) => void, className?: string }) => (
-    <Tooltip content="Rename Agent" position="right">
+// AI 제안 시 공통 스타일: 하늘색 글로우 및 맥동 효과
+const proposedStyle = "ring-2 ring-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.6)] animate-[pulse_1s_infinite] scale-110 z-10";
+
+export const RenameButton = ({ 
+    onClick, 
+    className, 
+    isProposed 
+}: { 
+    onClick: (e: React.MouseEvent) => void, 
+    className?: string,
+    isProposed?: boolean 
+}) => (
+    <Tooltip content={isProposed ? "AI RECOMMEND: Rename" : "Rename Agent"} position="right">
         <button 
             onClick={onClick} 
             className={clsx(
                 "p-1 rounded transition-all hover:bg-blue-500/20 text-blue-500 cursor-pointer shrink-0", 
+                isProposed && proposedStyle,
                 className
             )}
         >
-            <Edit2 size={11} />
+            <Edit2 size={11} className={isProposed ? "animate-bounce" : ""} />
         </button>
     </Tooltip>
 );
@@ -41,55 +55,87 @@ const getActionButtonClass = (active: boolean, colorClass: string, hoverClass: s
     );
 
 export const AgentActionButtons = ({
-    agent, state, onTogglePriority, onTogglePause, onTerminate, onTransferLock, layout = 'row', showLabels = false, tooltipPosition = 'bottom'
+    agent, state, onTogglePriority, onTogglePause, onTerminate, onTransferLock, onStartRename,
+    layout = 'row', showLabels = false, tooltipPosition = 'bottom',
+    isAiProposed
 }: AgentActionButtonsProps) => {
     const { isLocked, isPaused, isPriority } = useAgentLogic(agent, state);
     const isGlobalStopped = !!state.globalStop;
     const targetUuid = agent.uuid || agent.id; 
-    const canSeize = !!(state.holder && !isLocked && !isPaused && !isGlobalStopped);
-    const isPauseDisabled = isGlobalStopped;
+    
+    // AI 제안 확인 로직 (배열에서 현재 에이전트용 액션을 찾음)
+    const proposals = state.pendingProposals || [];
+    const myProposal = proposals.find(p => p.targetId === targetUuid || p.targetId === agent.displayId);
+    
+    // 개별 액션 매칭
+    const isPauseProposed = myProposal?.action === 'PAUSE';
+    const isResumeProposed = myProposal?.action === 'RESUME';
+    const isPriorityProposed = myProposal?.action === 'PRIORITY' || myProposal?.action === 'REVOKE';
+    const isTransferProposed = myProposal?.action === 'TRANSFER';
+    const isTerminateProposed = myProposal?.action === 'TERMINATE';
+    const isRenameProposed = myProposal?.action === 'RENAME';
+
+    const isThisAgentTarget = !!myProposal;
 
     return (
-        <div className={clsx("flex items-center gap-1", layout === 'compact' && "justify-between w-full mt-2")}>
-            <Tooltip content={isPriority ? "Revoke Priority" : "Grant Priority"} position={tooltipPosition}>
+        <div className={clsx(
+            "flex items-center gap-1", 
+            isThisAgentTarget && "bg-sky-500/10 rounded-lg p-0.5 ring-1 ring-sky-500/20"
+        )}>
+            {/* Rename Button */}
+            {onStartRename && (
+                <RenameButton 
+                    onClick={(e) => { e.stopPropagation(); onStartRename(targetUuid); }}
+                    isProposed={isRenameProposed}
+                />
+            )}
+
+            {/* Priority Button */}
+            <Tooltip content={isPriorityProposed ? "AI RECOMMEND: Priority" : (isPriority ? "Revoke Priority" : "Grant Priority")} position={tooltipPosition}>
                 <button 
                     onClick={(e) => { e.stopPropagation(); onTogglePriority(targetUuid, !isPriority); }} 
-                    className={getActionButtonClass(isPriority, "bg-yellow-500/10 text-yellow-500 border border-yellow-500/50", "hover:bg-yellow-400/10", false, showLabels)}
+                    className={clsx(
+                      getActionButtonClass(isPriority, "bg-yellow-500/10 text-yellow-500 border border-yellow-500/50", "hover:bg-yellow-400/10", false, showLabels),
+                      isPriorityProposed && proposedStyle
+                    )}
                 >
                     <Star size={12} className={clsx(isPriority && "fill-current")} />
-                    {showLabels && <span>Priority</span>}
                 </button>
             </Tooltip>
 
-            <Tooltip content={isGlobalStopped ? "System Halted" : (canSeize ? "Force Lock Transfer" : "Cannot Seize")} position={tooltipPosition}>
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onTransferLock(targetUuid); }} 
-                    disabled={!canSeize} 
-                    className={getActionButtonClass(canSeize, "bg-purple-500/10 text-purple-500 border border-purple-500/50", "hover:bg-purple-500/20", !canSeize, showLabels)}
-                >
-                    <Zap size={12} fill={canSeize ? "currentColor" : "none"} />
-                    {showLabels && <span>Seize</span>}
-                </button>
-            </Tooltip>
-
-            <Tooltip content={isGlobalStopped ? "System Halted" : (isPaused ? "Resume" : "Pause")} position={tooltipPosition}>
+            {/* Pause/Resume Button */}
+            <Tooltip content={isPauseProposed || isResumeProposed ? "AI RECOMMEND: State Change" : (isPaused ? "Resume" : "Pause")} position={tooltipPosition}>
                 <button 
                     onClick={(e) => { e.stopPropagation(); onTogglePause(targetUuid, isPaused); }} 
-                    disabled={isPauseDisabled}
-                    className={getActionButtonClass(isPaused, "bg-zinc-700 text-zinc-100 border border-zinc-500", "hover:bg-zinc-600", isPauseDisabled, showLabels)}
-                >
+                    className={clsx(
+                      getActionButtonClass(isPaused, "bg-zinc-700 text-zinc-100 border border-zinc-500", "hover:bg-zinc-600", isGlobalStopped, showLabels),
+                      (isPauseProposed || isResumeProposed) && proposedStyle
+                )}>
                     {isPaused ? <Play size={12} fill="currentColor" /> : <Pause size={12} fill="currentColor" />}
-                    {showLabels && <span>{isPaused ? 'Resume' : 'Pause'}</span>}
                 </button>
             </Tooltip>
 
-            <Tooltip content="Terminate Agent" position={tooltipPosition}>
+            {/* Seize (Transfer) Button */}
+            <Tooltip content={isTransferProposed ? "AI RECOMMEND: Force Seize" : "Transfer Lock"} position={tooltipPosition}>
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onTransferLock(targetUuid); }} 
+                    className={clsx(
+                      getActionButtonClass(false, "bg-purple-500/10 text-purple-500", "hover:bg-purple-500/20", isGlobalStopped || isLocked || isPaused, showLabels),
+                      isTransferProposed && proposedStyle
+                )}>
+                    <Zap size={12} />
+                </button>
+            </Tooltip>
+
+            {/* Terminate Button */}
+            <Tooltip content={isTerminateProposed ? "AI RECOMMEND: Termination" : "Terminate"} position={tooltipPosition}>
                 <button 
                     onClick={(e) => { e.stopPropagation(); onTerminate(targetUuid); }} 
-                    className={getActionButtonClass(false, "", "hover:bg-red-500/20 text-red-500", false, showLabels)}
-                >
+                    className={clsx(
+                        getActionButtonClass(false, "", "hover:bg-red-500/20 text-red-500", false, showLabels),
+                        isTerminateProposed && "ring-2 ring-red-500 shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse scale-110 z-10 bg-red-500/10"
+                    )}>
                     <Trash2 size={12} />
-                    {showLabels && <span>Terminate</span>}
                 </button>
             </Tooltip>
         </div>
