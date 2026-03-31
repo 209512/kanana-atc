@@ -4,7 +4,10 @@ import { useATCSystem } from '@/hooks/system/useATCSystem';
 import { useATCStream } from '@/hooks/system/useATCStream'; 
 import { atcApi, setApiMode } from '@/contexts/atcApi';
 import { useAudio } from '@/hooks/system/useAudio';
+import { useAutonomy } from '@/hooks/system/useAutonomy';
+import { useATCActions } from '@/hooks/system/useATCActions';
 import { Agent, ATCState } from '@/contexts/atcTypes';
+import { ATC_CONFIG } from '@/constants/atcConfig';
 
 export interface ATCContextType {
   state: ATCState;
@@ -32,6 +35,16 @@ export interface ATCContextType {
   submitRename: (uuid: string, newName: string) => Promise<void>;
   isAiMode: boolean;
   toggleAiMode: (isAi: boolean) => Promise<void>;
+  pendingProposals: any | null; 
+  approveProposals: () => Promise<void>;
+  rejectProposals: () => void;
+  isAiAutoMode: boolean;
+  toggleAiAutoMode: () => void;
+  riskScore: number;
+  autonomyLevel: number;
+  handoverTarget: string | null;
+  resetHandover: () => void;
+  aiQuota: number;
 }
 
 export const ATCContext = createContext<ATCContextType | null>(null);
@@ -41,7 +54,15 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const { markAction } = useATCStream(setState, setAgents);
   const [isAiMode, setIsAiMode] = useState(false);
   const [isAdminMuted, setIsAdminMuted] = useState(false);
+  const [isAiAutoMode, setIsAiAutoMode] = useState(false);
+  
   const { playAlert, playSuccess, playClick } = useAudio(isAdminMuted);
+  const { riskScore, autonomyLevel, recordAction, checkDeltaSafety } = useAutonomy(state, agents, addLog);
+
+  const actions = useATCActions(
+    agents, state, setState, setAgents, markAction, addLog, 
+    playClick, playAlert, playSuccess
+  );
 
   useEffect(() => {
     if (state.activeAgentCount === 0 && state.trafficIntensity > 0) {
@@ -49,181 +70,240 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  const setTrafficIntensity = useCallback((val: number) => {
-    const minRequired = state.priorityAgents?.length || 1;
-    const finalValue = Math.max(minRequired, Math.floor(val));
+  const [aiQuota, setAiQuota] = useState(20);
+  useEffect(() => {
+    const unsubscribe = atcApi.subscribeQuota((newQuota) => {
+      setAiQuota(newQuota);
+    });
+    return () => unsubscribe();
+  }, [])
 
-    if (finalValue !== state.trafficIntensity) {
-        playClick();
-        atcApi.scaleAgents(finalValue)
-          .then(() => {
-              setState(prev => ({ ...prev, trafficIntensity: finalValue }));
-          })
-          .catch(() => {
-              playAlert();
-          });
-    }
-  }, [state.trafficIntensity, state.priorityAgents, setState, playClick, playAlert]);
-
-  const togglePause = useCallback((uuid: string) => {
-    playClick();
-    const target = agents.find(a => String(a.uuid || a.id) === String(uuid));
-    if (!target) return;
-
-    const nextPaused = !target.isPaused;
-    markAction(uuid, 'isPaused', nextPaused);
+  // const findUuid = useCallback((idOrName: string) => {
+  //   if (!idOrName || idOrName === 'SYSTEM') return idOrName;
+  //   const searchKey = String(idOrName).trim().toUpperCase();
     
-    atcApi.togglePause(uuid, nextPaused)
-      .catch(err => {
-          playAlert();
-          markAction(uuid, 'isPaused', !nextPaused); 
-      });
-  }, [agents, markAction, playClick, playAlert]);
+  //   const byUuid = agents.find(a => String(a.uuid).toUpperCase() === searchKey);
+  //   if (byUuid) return byUuid.uuid;
 
-  const togglePriority = useCallback((uuid: string) => {
-    const target = agents.find(a => String(a.uuid || a.id) === String(uuid));
-    if (!target) return;
+  //   const byName = agents.find(a => 
+  //     String(a.displayName || '').toUpperCase() === searchKey ||
+  //     String(a.name || '').toUpperCase() === searchKey
+  //   );
+  //   if (byName) return byName.uuid;
 
-    const nextPriority = !target.priority;
-    nextPriority ? playSuccess() : playClick();
-    markAction(uuid, 'priority', nextPriority);
+  //   const byId = agents.find(a => String(a.id).toUpperCase() === searchKey);
+  //   return byId?.uuid;
+  // }, [agents]);
+  const findUuid = useCallback((idOrName: string) => {
+    if (!idOrName) return null;
+    const key = String(idOrName).trim().toUpperCase();
+    
+    if (['SYSTEM', 'GLOBAL', 'USER'].includes(key)) return key;
+    
+    const byUuid = agents.find(a => a.uuid.toUpperCase() === key);
+    if (byUuid) return byUuid.uuid;
 
-    atcApi.togglePriority(uuid, nextPriority)
-      .catch(err => {
-          playAlert();
-          markAction(uuid, 'priority', !nextPriority); 
-      });
-  }, [agents, markAction, playClick, playSuccess, playAlert]);
+    const found = agents.find(a => 
+      (a.displayName || '').toUpperCase() === key || 
+      a.id.toUpperCase() === key
+    );
+    return found?.uuid || null;
+  }, [agents]);
 
-  const terminateAgent = useCallback((uuid: string) => {
-    if (agents.length <= 1) {
-        playAlert();
-        return;
-    }
-    playClick();
-    markAction(uuid, '', null, true);
+  // const executeActionWithGuardrail = useCallback(async (proposal: any) => {
+  //   if (!proposal || !proposal.action) return false;
 
-    atcApi.terminateAgent(uuid)
-      .then(() => {
-          setState(prev => ({ ...prev, trafficIntensity: Math.max(0, agents.length - 1) }));
-      })
-      .catch(() => {
-          playAlert();
-          markAction(uuid, '', null, false);
-      });
-  }, [agents.length, setState, markAction, playClick, playAlert]);
+  //   const { action, targetId, value: pVal } = proposal;
+  //   const actualUuid = findUuid(targetId);
+  //   console.log(`[AI_EXEC_ATTEMPT] Action: ${action}, TargetInput: ${targetId}, FoundUUID: ${actualUuid}`);
+  //   const agent = agents.find(a => a.uuid === actualUuid);
 
-  const transferLock = useCallback((uuid: string) => {
-    playAlert();
-    markAction('', 'forcedCandidate', uuid);
-    markAction('', 'holder', null); 
+  //   if (!agent && !['SYSTEM', 'USER'].includes(targetId)) return false;
 
-    atcApi.transferLock(uuid)
-      .catch(() => {
-          markAction('', 'forcedCandidate', null);
-      });
-  }, [markAction, playAlert]);
+  //   try {
+  //     switch (action) {
+  //       case 'PAUSE': 
+  //         if (actualUuid && agent && !agent.isPaused) await actions.togglePause(actualUuid); 
+  //         break;
+  //       case 'RESUME': 
+  //         if (actualUuid && agent && agent.isPaused) await actions.togglePause(actualUuid); 
+  //         break;
+  //       case 'PRIORITY': 
+  //         if (actualUuid && agent && !agent.priority) await actions.togglePriority(actualUuid); 
+  //         break;
+  //       case 'REVOKE': 
+  //         if (actualUuid && agent && agent.priority) await actions.togglePriority(actualUuid); 
+  //         break;
+  //       case 'TRANSFER': 
+  //         if (actualUuid) await actions.transferLock(actualUuid); 
+  //         break;
+  //       case 'TERMINATE': 
+  //         if (actualUuid) await actions.terminateAgent(actualUuid); 
+  //         break;
+  //       case 'RENAME': 
+  //         if (actualUuid && pVal) await actions.handleRename(actualUuid, String(pVal)); 
+  //         break;
+  //       case 'STOP': 
+  //         if (!state.globalStop) await actions.toggleGlobalStop(); 
+  //         break;
+  //       case 'START': 
+  //         if (state.globalStop) await actions.toggleGlobalStop(); 
+  //         break;
+  //       case 'SCALE': 
+  //         if (pVal !== undefined) await actions.setTrafficIntensity(Number(pVal)); 
+  //         break;
+  //       case 'OVERRIDE': 
+  //         await actions.triggerOverride(); 
+  //         break;
+  //       case 'RELEASE': 
+  //         await actions.releaseLock(); 
+  //         break;
+  //       default:
+  //         return false;
+  //     }
+  //     recordAction();
+  //     return true;
+  //   } catch (err) {
+  //     console.warn(`[AI_EXEC_FAIL] Action: ${proposal.action} | Reason: ${err}`);
+  //     return false;
+  //   }
+  // }, [agents, state.globalStop, findUuid, actions, recordAction]);
+  
+  const executeActionWithGuardrail = useCallback(async (proposal: any) => {
+    if (!proposal || !proposal.action) return false;
 
-  const toggleGlobalStop = useCallback(() => {
-    playAlert();
-    const nextStop = !state.globalStop;
-    markAction('', 'globalStop', nextStop);
+    const { action, targetId, value: pVal } = proposal;
+    const targetKey = String(targetId).toUpperCase();
+    const actualUuid = findUuid(targetId);
 
-    atcApi.toggleGlobalStop(nextStop)
-      .catch(() => {
-          markAction('', 'globalStop', !nextStop);
-      });
-  }, [state.globalStop, markAction, playAlert]);
-
-  const triggerOverride = useCallback(async () => {
-    playAlert();
-    markAction('', 'overrideSignal', true);
-    markAction('', 'holder', 'Human-Operator');
-
-    return atcApi.triggerOverride()
-      .catch(() => {
-          markAction('', 'overrideSignal', false);
-          markAction('', 'holder', null);
-      });
-  }, [playAlert, markAction]);
-
-  const releaseLock = useCallback(async () => {
-    playSuccess();
-    markAction('', 'overrideSignal', false);
-    markAction('', 'holder', null);
-
-    return atcApi.releaseLock()
-      .catch(() => {
-          markAction('', 'overrideSignal', true);
-          markAction('', 'holder', 'Human-Operator');
-      });
-  }, [playSuccess, markAction]);
-
-  const updateAgentConfig = useCallback(async (uuid: string, config: any) => {
-      setAgents(prev => prev.map(a => String(a.uuid || a.id) === String(uuid) ? { ...a, ...config } : a));
-
-      try {
-          await atcApi.updateConfig(uuid, config);
-          playSuccess();
-      } catch (error) {
-          playAlert();
-          console.error("Config Sync Failed:", error);
-      }
-  }, [setAgents, playSuccess, playAlert]);
-
-  const handleRename = useCallback(async (uuid: string, newName: string) => {
-    if (!newName) return;
-    markAction(uuid, 'displayName', newName); 
     try {
-        await atcApi.renameAgent(uuid, newName);
-        playSuccess();
-    } catch (err: any) {
-        playAlert();
-        markAction(uuid, 'displayName', null);
+      if (targetKey === 'SYSTEM' || targetKey === 'GLOBAL') {
+        if (action === 'SCALE') return await actions.setTrafficIntensity(Number(pVal));
+        if (action === 'STOP') return await actions.toggleGlobalStop();
+        if (action === 'START') return await actions.toggleGlobalStop();
+        if (action === 'OVERRIDE') return await actions.triggerOverride();
+        if (action === 'RELEASE') return await actions.releaseLock();
+      }
+
+      if (!actualUuid) return false;
+      const agent = agents.find(a => a.uuid === actualUuid);
+
+      switch (action) {
+        case 'PAUSE': 
+          if (agent && !agent.isPaused) await actions.togglePause(actualUuid); 
+          break;
+        case 'RESUME': 
+          if (agent && agent.isPaused) await actions.togglePause(actualUuid); 
+          break;
+        case 'PRIORITY': 
+          if (agent && !agent.priority) await actions.togglePriority(actualUuid); 
+          break;
+        case 'REVOKE': 
+          if (agent && agent.priority) await actions.togglePriority(actualUuid); 
+          break;
+        case 'RENAME': 
+          if (pVal) await actions.handleRename(actualUuid, String(pVal)); 
+          break;
+        case 'TERMINATE': 
+          await actions.terminateAgent(actualUuid); 
+          break;
+        case 'TRANSFER': 
+          await actions.transferLock(actualUuid); 
+          break;
+        default: return false;
+      }
+      recordAction();
+      return true;
+    } catch (err) {
+      console.error(`[EXEC_ERR] ${action} on ${targetId}:`, err);
+      return false;
     }
-  }, [markAction, playSuccess, playAlert]);
+  }, [agents, findUuid, actions, recordAction]);
+
+  const approveProposals = useCallback(async () => {
+    const proposals = state.pendingProposals;
+    if (!proposals || proposals.length === 0) return;
+    
+    addLog(ATC_CONFIG.LOG_MSG.PROPOSAL_EXEC(proposals.length), "exec", "SYSTEM");
+    
+    try {
+      await atcApi.executeProposals(proposals);
+      
+      for (const prop of proposals) {
+        await executeActionWithGuardrail(prop);
+      }
+      playSuccess();
+    } catch (err) {
+      console.error("AI Action Execution Failed:", err);
+      addLog("❌ EXECUTION_FAILED", "critical", "SYSTEM");
+    } finally {
+      setState(prev => ({ ...prev, pendingProposals: [] }));
+    }
+  }, [state.pendingProposals, executeActionWithGuardrail, setState, addLog, playSuccess]);
 
   const handleModeToggle = useCallback(async (isAi: boolean) => {
-      if (!isAi) {
-          setApiMode(false);
-          setIsAiMode(false);
-          addLog("🔌 AI_LINK: OFFLINE", "system");
-          return;
-      }
+    setApiMode(isAi);
+    setIsAiMode(isAi);
+    if (!isAi) {
+        setIsAiAutoMode(false);
+        setState(prev => ({ ...prev, pendingProposals: [] }));
+    }
+    addLog(isAi ? ATC_CONFIG.LOG_MSG.AI_MODE_ON : ATC_CONFIG.LOG_MSG.AI_MODE_OFF, 
+           isAi ? "insight" : "system", "SYSTEM");
+  }, [addLog, setState]);
 
-      addLog("🌐 AI_LINK: INITIALIZING...", "insight");
-      try {
-          const recentLogs = state.logs.slice(-8).map(l => `[${l.type}] ${l.message}`).join("\n");
-          const context = `
-            [SYSTEM_STATUS] DRONES: ${agents.length}, HOLDER: ${state.holder || 'AUTO'}
-            [RECENT_EVENTS]
-            ${recentLogs || 'No recent events recorded.'}
-          `;
-          await atcApi.askKananaSmart({ text: context }, addLog);
+  const resetHandover = useCallback(() => {
+    playClick();
+    setIsAiAutoMode(false); 
+    setState(prev => ({ ...prev, handoverTarget: null }));
+    addLog(ATC_CONFIG.LOG_MSG.RECOVERY_COMPLETE, "success", "USER");
+  }, [playClick, setState, addLog]);
 
-          setApiMode(true);
-          setIsAiMode(true);
-      } catch (err) {
-          setApiMode(false);
-          setIsAiMode(false);
-          addLog("🚫 AI_LINK: TERMINATED (VERIFY_FAILED)", "critical");
-      }
-  }, [agents.length, state.holder, state.logs, addLog]);
+  const triggerHandover = useCallback((reason: string) => {
+    const topEmergency = [...agents].sort((a, b) => 
+      parseFloat(b.metrics?.load || '0') - parseFloat(a.metrics?.load || '0')
+    )[0];
+    
+    addLog(ATC_CONFIG.LOG_MSG.HANDOVER(reason), "critical", "SYSTEM");
+    
+    playAlert();
+    setIsAiAutoMode(false);
+    setState(prev => ({ ...prev, handoverTarget: topEmergency?.uuid || 'SYSTEM' }));
+  }, [agents, addLog, playAlert, setState]);
+
+  useEffect(() => {
+    if (isAiAutoMode && checkDeltaSafety()) {
+      triggerHandover(ATC_CONFIG.LOG_MSG.EARLY_EXIT);
+    }
+  }, [isAiAutoMode, checkDeltaSafety, triggerHandover]);
 
   const value = useMemo(() => ({
-    state, agents, setState, setAgents, updateAgentConfig,
+    state, agents, setState, setAgents, ...actions,
     isAdminMuted, setIsAdminMuted, toggleAdminMute: () => setIsAdminMuted(prev => !prev),
-    toggleGlobalStop, togglePause, togglePriority, transferLock, terminateAgent, markAction,
-    setTrafficIntensity, triggerOverride, releaseLock, playAlert, playClick, addLog,
+    markAction, addLog, playAlert, playClick,
     updatePriorityOrder: (newOrder: string[]) => {
-        markAction('', 'priorityAgents', newOrder);
-        atcApi.updatePriorityOrder(newOrder).catch(() => {});
+      markAction('', 'priorityAgents', newOrder);
+      atcApi.updatePriorityOrder(newOrder).catch(() => {});
     },
-    renameAgent: handleRename,
-    submitRename: handleRename,
+    renameAgent: actions.handleRename,
+    submitRename: actions.handleRename,
+    pendingProposals: state.pendingProposals,
+    approveProposals, 
+    rejectProposals: () => {
+      playClick();
+      addLog(ATC_CONFIG.LOG_MSG.PROPOSAL_REJECT, "warn", "USER");
+      setState(prev => ({ ...prev, pendingProposals: [] }));
+    },
     isAiMode, toggleAiMode: handleModeToggle,
-  }), [state, agents, setState, setAgents, updateAgentConfig, isAdminMuted, toggleGlobalStop, togglePause, togglePriority, transferLock, terminateAgent, markAction, addLog, setTrafficIntensity, triggerOverride, releaseLock, playAlert, playClick, handleRename, isAiMode, handleModeToggle]);
-  
+    isAiAutoMode, toggleAiAutoMode: () => {
+      playClick();
+      setIsAiAutoMode(prev => !prev);
+    },
+    riskScore, autonomyLevel,
+    handoverTarget: state.handoverTarget,
+    resetHandover, aiQuota,
+  }), [state, agents, actions, aiQuota, isAdminMuted, isAiMode, isAiAutoMode, riskScore, autonomyLevel, approveProposals, handleModeToggle, resetHandover, markAction, addLog, playAlert, playClick, setState]);
+
   return (
     <ATCContext.Provider value={value}>
       <style>{`
