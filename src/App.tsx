@@ -10,13 +10,16 @@ const App = () => {
 
   return (
     <div className={clsx(
-      "h-screen w-screen font-sans flex overflow-hidden relative select-none", 
+      "h-screen w-screen font-sans relative overflow-hidden select-none", 
       isDark ? "bg-[#05090a] text-gray-300" : "bg-[#f1f5f9] text-slate-800"
     )}>
-      <div className="flex-1 min-w-0 h-full relative overflow-hidden">
-        <Dashboard />
+      {/* 1. 메인 뷰 (전체 배경) */}
+      <Dashboard />
+      
+      {/* 2. 우측 사이드바 (Dashboard 위에 고정) */}
+      <div className="fixed top-0 right-0 h-full z-50">
+        <SidebarContainer />
       </div>
-      <SidebarContainer />
     </div>
   );
 };

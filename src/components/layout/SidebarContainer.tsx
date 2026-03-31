@@ -36,8 +36,8 @@ export const SidebarContainer = () => {
             <aside 
                 ref={sidebarRef}
                 className={clsx(
-                    "h-screen border-l flex flex-col shadow-2xl backdrop-blur-md z-50 pointer-events-auto relative shrink-0",
-                    isDark ? "bg-[#0d1117]/90 border-gray-800 text-gray-300" : "bg-slate-50/80 border-slate-200/40 text-slate-800",
+                    "h-screen border-l flex flex-col shadow-[-10px_0_30px_rgba(0,0,0,0.3)] backdrop-blur-xl pointer-events-auto relative", // fixed는 App.tsx에서 처리
+                    isDark ? "bg-[#0d1117]/85 border-white/5 text-gray-300" : "bg-white/80 border-slate-200/40 text-slate-800",
                     !isResizing && "transition-all duration-300"
                 )}
                 style={{ width: isCollapsed ? '4px' : sidebarWidth }}

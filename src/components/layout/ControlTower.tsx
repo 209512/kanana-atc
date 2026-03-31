@@ -10,14 +10,12 @@ export const ControlTower = () => {
 
     return (
         <div 
-            className="fixed top-0 left-0 pointer-events-none transition-all duration-300" 
+            className="fixed inset-0 pointer-events-none transition-all duration-300" 
             style={{ 
-                zIndex: 45, 
-                width: `calc(100vw - ${sidebarWidth}px)`, 
-                height: '100vh' 
+                zIndex: 30,
+                right: `${sidebarWidth}px`,
             }}
         >
-            {/* 하위 컴포넌트들은 pointer-events-auto 설정 */}
             <TerminalLog />
             <QueueDisplay />
             <TacticalPanel />
