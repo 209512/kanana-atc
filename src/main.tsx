@@ -63,8 +63,8 @@ async function enableMocking() {
   }
 }
 
-enableMocking().then(() => {
-  createRoot(document.getElementById('root') as HTMLElement).render(
+function renderApp(root: HTMLElement) {
+  createRoot(root).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <ATCInitializer>
@@ -73,16 +73,15 @@ enableMocking().then(() => {
       </QueryClientProvider>
     </StrictMode>
   );
-}).catch((error) => {
-  logger.error('Failed to enable mocking:', error);
-  // Fallback rendering in case mocking fails
-  createRoot(document.getElementById('root') as HTMLElement).render(
-    <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <ATCInitializer>
-          <App />
-        </ATCInitializer>
-      </QueryClientProvider>
-    </StrictMode>
-  );
-});
+}
+
+const root = typeof document !== 'undefined' ? document.getElementById('root') : null;
+
+if (root) {
+  enableMocking()
+    .then(() => renderApp(root))
+    .catch((error) => {
+      logger.error('Failed to enable mocking:', error);
+      renderApp(root);
+    });
+}
