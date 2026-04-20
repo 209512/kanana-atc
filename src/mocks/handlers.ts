@@ -49,9 +49,7 @@ export const handlers = [
     
     return new HttpResponse(new ReadableStream({
       start(controller) {
-        // [설계 오류 수정] MSW 메인 스레드 병목 해결: 
-        // 스트림 주기를 100ms(하드코딩)에서 최소 250ms~500ms(스케일링에 따른 가변)로 늦추어 
-        // 메인 스레드 연산 압박을 줄입니다. (UI 렌더링은 이미 워커와 R3F interpolation이 처리하므로 지장 없음)
+        // WORKER: Dynamic interval for main thread optimization (250ms ~ 1000ms)
         const agentCount = simulator.agents.size;
         const dynamicInterval = Math.max(250, Math.min(1000, agentCount * 5));
         
