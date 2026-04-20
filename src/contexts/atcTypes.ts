@@ -3,10 +3,19 @@ import { LogType } from '@/utils/logStyles';
 
 export interface AIProposal {
   id: string;
-  action: 'PAUSE' | 'RESUME' | 'PRIORITY' | 'REVOKE' | 'TRANSFER' | 'RENAME'
-  | 'TERMINATE' | 'STOP' | 'START' | 'OVERRIDE' | 'RELEASE' | 'SCALE';
+  agentId: string;
+  action: string;
   targetId?: string;
-  value?: any;
+  value?: string | boolean | null;
+  reason: string;
+  timestamp: number;
+}
+
+export interface ParsedAction {
+  id: string;
+  action: string;
+  targetId?: string;
+  value?: string | boolean | null;
   reason: string;
   timestamp: number;
 }
@@ -21,6 +30,13 @@ export interface LogEntry {
   type: LogType;
 }
 
+export interface RiskMetrics {
+  ts: string;
+  lat: string;
+  tot: string;
+  load: string;
+}
+
 export interface Agent {
   id: string;
   uuid: string;
@@ -33,12 +49,19 @@ export interface Agent {
   priority?: boolean;
   isPaused?: boolean;
   color?: string;
-  position: [number, number, number];
-  metrics?: {
-    ts: string;
-    lat: string;
-    tot: string;
-    load: string;
+  position?: [number, number, number];
+  activeTime?: number;
+  index?: number;
+  seed?: number;
+  provider?: string;
+  apiKey?: string;
+  systemPrompt?: string;
+  persona?: string;
+  metrics: {
+    ts: number;
+    lat: number;
+    tot: number;
+    load: number;
   };
 }
 
@@ -54,7 +77,7 @@ export interface ATCState {
   overrideSignal: boolean; 
   latency: number;
   trafficIntensity: number;
-  pendingProposals: AIProposal[];
+  pendingProposals: Map<string, AIProposal>;
   handoverTarget: string | null;
   autonomyLevel: number;
 }
