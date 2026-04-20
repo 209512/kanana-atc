@@ -77,8 +77,7 @@ class AudioService {
         const len = binaryString.length;
         const bytes = new Int16Array(len / 2);
         
-        // DataView를 활용하여 실행 환경의 엔디안(Endianness) 설정에 관계없이 
-        // 항상 리틀 엔디안(true)으로 안전하게 16-bit PCM 데이터를 파싱합니다.
+        // COMPATIBILITY: Parse 16-bit PCM as little-endian safely via DataView
         const buffer = new ArrayBuffer(len);
         const view = new DataView(buffer);
         for (let i = 0; i < len; i++) {
@@ -169,20 +168,13 @@ class AudioService {
     }
   }
   
-  /**
-   * 카나나 API에서 온 Base64 PCM 데이터를 큐에 넣고 재생
-   * @param base64Data PCM 데이터
-   * @param sampleRate 카나나 표준 24000Hz
-   */
+  // QUEUE: Push Base64 PCM data to audio queue (Kanana-O 24kHz standard)
   async playPCM(base64Data: string, sampleRate: number = 24000) {
     this.audioQueue.push({ type: 'pcm', data: base64Data, sampleRate });
     this.processQueue();
   }
 
-  /**
-   * 브라우저 내장 Web Speech API를 사용하여 텍스트 읽어주기 (Lite Version) 큐에 넣고 재생
-   * @param text 읽어줄 텍스트
-   */
+  // FALLBACK: Queue Web Speech API TTS for Lite Version
   playTTS(text: string, lang: string = 'ko-KR') {
     this.audioQueue.push({ type: 'tts', data: text, lang });
     this.processQueue();

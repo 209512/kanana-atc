@@ -82,7 +82,7 @@ export const KananaKeyModal = () => {
             onClick={() => {
               sessionStorage.removeItem('KANANA_API_KEY');
               localStorage.removeItem('KANANA_API_KEY');
-              // 키 삭제 시 초기 설정된 쿼터(20)로 리셋하여 시뮬레이션 모드에서 정상 작동하도록 처리
+              // Action: Reset quota to default on key removal
               const defaultQuota = Number(import.meta.env?.VITE_AI_QUOTA) || 20;
               useATCStore.getState().setAiQuota(defaultQuota);
               close();
@@ -105,7 +105,7 @@ export const KananaKeyModal = () => {
                   sessionStorage.setItem('KANANA_API_KEY', trimmed);
                   localStorage.removeItem('KANANA_API_KEY');
                 }
-                // 새 키 입력 시 초기 설정된 쿼터(20)로 리셋
+                // Action: Reset quota to default on new key insertion
                 const defaultQuota = Number(import.meta.env?.VITE_AI_QUOTA) || 20;
                 useATCStore.getState().setAiQuota(defaultQuota);
               }
