@@ -41,9 +41,9 @@ export default async function handler(req: Request, executionCtx?: any) {
 
     if (!apiKey || !apiEndpoint) {
       return new Response(JSON.stringify({ 
-        error: "MISSING_API_KEY", 
-        message: "Missing API Key. Please provide a valid Kanana API Key." 
-      }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        error: "CONFIG_ERROR", 
+        message: "Vercel 환경변수(ENDPOINT) 또는 클라이언트 API_KEY가 누락되었습니다." 
+      }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
 
     let body;
