@@ -37,8 +37,6 @@ export const useATCStore = create<ATCStore>()((...a) => {
 });
 
 // Window global expose for E2E testing
-if (typeof window !== 'undefined' && import.meta.env.MODE !== 'production') {
-  if (typeof window !== 'undefined') {
-    (window as unknown as { useATCStore: unknown }).useATCStore = useATCStore;
-  }
+if (typeof window !== 'undefined' && (import.meta.env.MODE !== 'production' || import.meta.env.VITE_USE_MSW === 'true')) {
+  (window as unknown as { useATCStore: unknown }).useATCStore = useATCStore;
 }
