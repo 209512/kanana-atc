@@ -1,9 +1,10 @@
 // src/components/command/HandoverOverlay.tsx
 import React from 'react';
-import { useATC } from '@/hooks/system/useATC';
+import { useATCStore } from '@/store/useATCStore';
 
 export const HandoverOverlay: React.FC<{ reason: string, targetId: string }> = ({ reason, targetId }) => {
-  const { resetHandover, agents } = useATC();
+  const resetHandover = useATCStore(s => s.resetHandover);
+  const agents = useATCStore(s => s.agents);
   const targetName = agents.find(a => a.uuid === targetId)?.displayName || targetId;
 
   return (
@@ -17,7 +18,7 @@ export const HandoverOverlay: React.FC<{ reason: string, targetId: string }> = (
         
         <div className="p-5 bg-red-900/30 border border-red-500/40 text-left mb-8">
           <p className="text-[10px] text-red-400 font-bold mb-2 uppercase tracking-widest">Immediate Action Required</p>
-          <p className="text-white text-base">기체 <span className="text-red-400 font-bold">[{targetName}]</span>의 시스템 부하가 임계치를 초과했습니다. 즉시 수동 관제로 전환하십시오.</p>
+          <p className="text-white text-base">System load for agent <span className="text-red-400 font-bold">[{targetName}]</span> has exceeded critical thresholds. Please switch to manual control immediately.</p>
         </div>
 
         <button 

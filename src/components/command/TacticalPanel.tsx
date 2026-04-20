@@ -1,14 +1,15 @@
 // src/components/command/TacticalPanel.tsx
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import Draggable from 'react-draggable';
 import clsx from 'clsx';
-import { ChevronDown, Radio, Play, Pause } from 'lucide-react';
+import { ChevronDown, Radio, Play, Pause, X } from 'lucide-react';
 import { TacticalItem } from '@/components/command/TacticalItem';
 import { useTacticalActions } from '@/hooks/agent/useTacticalActions';
 import { useCategorizedAgents } from '@/hooks/agent/useCategorizedAgents';
 import { Agent } from '@/contexts/atcTypes';
 import { Tooltip } from '@/components/common/Tooltip';
-import { AIControlGroup } from '@/components/command/AIControlGroup';
+import { AIControlGroup } from '@/components/common/AIControlGroup';
+import { useUIStore } from '@/store/useUIStore';
 
 export const TacticalPanel = () => {
     const { isDark, sidebarWidth, globalStop, toggleGlobalStop, agents, state } = useTacticalActions();
@@ -16,6 +17,25 @@ export const TacticalPanel = () => {
     const [isOpen, setIsOpen] = useState(true);
     const [filterMode, setFilterMode] = useState<'all' | 'priority'>('all');
     const nodeRef = useRef(null);
+    const isTacticalPanelOpen = useUIStore(s => s.isTacticalPanelOpen);
+    const setTacticalPanelOpen = useUIStore(s => s.setTacticalPanelOpen);
+
+    // 모바일 뷰포트 감지
+    const [isMobile, setIsMobile] = useState(false);
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    // 윈도우 사이즈 변경 시 Draggable position 리셋을 위해 key 변경용 state 추가
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+    useEffect(() => {
+        const handleResize = () => setWindowWidth(window.innerWidth);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const safeSidebarWidth = typeof sidebarWidth === 'number' && !isNaN(sidebarWidth) ? sidebarWidth : 280;
 
@@ -24,7 +44,7 @@ export const TacticalPanel = () => {
     }, [agents, globalStop]);
 
     const sortedTacticalList = useMemo(() => {
-        const proposedIds = new Set(state?.pendingProposals?.map(p => p.targetId) || []);
+        const proposedIds = new Set(Array.from(state?.pendingProposals?.values() || []).map(p => p.targetId));
         const baseList = filterMode === 'priority' ? priorityAgents : agents;
         return [...baseList].sort((a, b) => {
             const idA = a.uuid || a.id;
@@ -37,17 +57,23 @@ export const TacticalPanel = () => {
         });
     }, [priorityAgents, filterMode, agents, state?.pendingProposals]);
 
+    if (!isTacticalPanelOpen) return null;
+
     return (
-        <Draggable nodeRef={nodeRef} handle=".tactical-handle" bounds="body">
+        <Draggable key={windowWidth} nodeRef={nodeRef} handle=".tactical-handle" bounds="body" disabled={isMobile}>
             <div ref={nodeRef} 
                 className={clsx(
-                    "fixed top-20 w-80 rounded-xl border shadow-2xl backdrop-blur-md z-50 flex flex-col max-h-[600px] overflow-hidden pointer-events-auto",
-                    isDark ? "bg-[#0d1117]/90 border-gray-800 text-gray-300" : "bg-slate-50/80 border-slate-200/40 text-slate-800"
+                    "fixed z-50 flex flex-col overflow-hidden pointer-events-auto transition-[height,border,box-shadow,background-color] duration-300",
+                    isMobile 
+                        ? "!top-[72px] !bottom-auto !left-2 !right-2 !w-auto !rounded-2xl ![transform:none]" 
+                        : "top-20 w-80 rounded-xl border shadow-2xl backdrop-blur-md",
+                    isDark ? "bg-[#0d1117]/90 border-gray-800 text-gray-300" : "bg-slate-50/80 border-slate-200/40 text-slate-800",
+                    isOpen ? (isMobile ? "h-[35vh]" : "max-h-[600px]") : "h-[42px]"
                 )}
-                style={{ right: safeSidebarWidth + 20 }}>
+                style={!isMobile ? { right: safeSidebarWidth + 20 } : undefined}>
                 
                 {/* 헤더 영역 */}
-                <div className={clsx("p-3 border-b flex justify-between items-center tactical-handle cursor-move select-none shrink-0", 
+                <div className={clsx("p-3 border-b flex justify-between items-center tactical-handle cursor-move select-none shrink-0 tactical-panel-container", 
                     isDark ? "bg-gray-800/20 border-gray-800" : "bg-white/40 border-slate-200/40")}>
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] font-mono">
                         <Radio size={14} className="text-blue-500 animate-pulse" />
@@ -55,9 +81,14 @@ export const TacticalPanel = () => {
                             <span>Tactical Command</span>
                         </Tooltip>
                     </div>
-                    <button onClick={() => setIsOpen(!isOpen)} className="p-1 hover:bg-white/10 rounded transition">
-                        <ChevronDown size={14} className={clsx(!isOpen && "rotate-180")} />
-                    </button>
+                    <div className="flex items-center">
+                        <button onClick={() => setIsOpen(!isOpen)} className="p-1 hover:bg-white/10 rounded transition">
+                            <ChevronDown size={14} className={clsx(!isOpen && "rotate-180")} />
+                        </button>
+                        <button onClick={() => setTacticalPanelOpen(false)} className="p-1 hover:bg-red-500/20 text-gray-500 hover:text-red-500 rounded transition">
+                            <X size={14} />
+                        </button>
+                    </div>
                 </div>
 
                 {isOpen && (

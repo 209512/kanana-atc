@@ -1,17 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, Key, Cpu, MessageSquare, Settings, ChevronDown } from 'lucide-react';
+// src/components/sidebar/AgentSettings.tsx
+import React, { useEffect, useState, useRef } from 'react';
+import { X, Save, Key, Cpu, MessageSquare, Settings, ChevronDown, Type, Brain } from 'lucide-react';
 import clsx from 'clsx';
 import { useAgentSettings } from '@/hooks/agent/useAgentSettings';
+import { useUIStore } from '@/store/useUIStore';
 
 export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [isAgentOpen, setIsAgentOpen] = useState(false);
     const [isProviderOpen, setIsProviderOpen] = useState(false);
+    const [agentApiKey, setAgentApiKey] = useState("");
     const modalRef = useRef<HTMLDivElement>(null);
+    const { terminalFontSize, setTerminalFontSize, openKananaKeyModal } = useUIStore();
 
     const {
         agents, isDark, areTooltipsEnabled, setAreTooltipsEnabled,
         selectedAgent, setSelectedAgent, provider, setProvider,
-        apiKey, setApiKey, model, setModel, systemPrompt, setSystemPrompt,
+        model, setModel, systemPrompt, setSystemPrompt,
         isLoading, handleSubmit
     } = useAgentSettings(onClose);
 
@@ -21,6 +25,15 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         { id: 'anthropic', name: 'Anthropic (Claude 3)' },
         { id: 'gemini', name: 'Google Gemini' }
     ];
+ 
+    useEffect(() => {
+        try {
+            const keys = JSON.parse(localStorage.getItem('AGENT_API_KEYS') || '{}');
+            setAgentApiKey(keys[selectedAgent]?.[provider] || "");
+        } catch {
+            setAgentApiKey("");
+        }
+    }, [selectedAgent, provider]);
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
@@ -37,16 +50,60 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
                 <form onSubmit={handleSubmit} className="space-y-4 font-mono">
                     {/* Tooltip Toggle */}
-                    <div className={clsx("p-3 rounded-lg border", isDark ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}>
-                        <label className="flex items-center justify-between cursor-pointer group">
-                            <span className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 opacity-70 group-hover:opacity-100">
-                                <MessageSquare size={12} /> INTERACTIVE_TOOLTIPS
-                            </span>
+                    <div className={clsx("p-3 rounded-lg border flex items-center justify-between", isDark ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}>
+                        <span className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 opacity-70">
+                            <MessageSquare size={12} /> INTERACTIVE_TOOLTIPS
+                        </span>
+                        <label className="cursor-pointer">
                             <input type="checkbox" checked={areTooltipsEnabled} onChange={(e) => setAreTooltipsEnabled(e.target.checked)} className="sr-only" />
                             <div className={clsx("w-8 h-4 rounded-full transition-colors relative", areTooltipsEnabled ? "bg-blue-600" : "bg-gray-600")}>
                                 <div className={clsx("absolute top-0.5 left-0.5 bg-white w-3 h-3 rounded-full transition-transform", areTooltipsEnabled ? "translate-x-4" : "translate-x-0")} />
                             </div>
                         </label>
+                    </div>
+
+                    {/* Font Size Slider */}
+                    <div className={clsx("p-3 rounded-lg border", isDark ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}>
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 opacity-70">
+                                <Type size={12} /> TERMINAL_FONT_SIZE
+                            </span>
+                            <span className="text-[10px] font-bold opacity-50">{terminalFontSize}px</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="10" max="18" step="1" 
+                            value={terminalFontSize} 
+                            onChange={(e) => setTerminalFontSize(Number(e.target.value))}
+                            className={clsx(
+                                "w-full appearance-none h-1.5 rounded-full outline-none",
+                                isDark ? "bg-gray-700 accent-blue-500" : "bg-gray-300 accent-blue-500"
+                            )}
+                        />
+                    </div>
+
+                    {/* Main System Kanana Key Settings */}
+                    <div className={clsx("p-3 rounded-lg border flex items-center justify-between", isDark ? "bg-cyan-900/10 border-cyan-500/20" : "bg-cyan-50 border-cyan-200")}>
+                        <div className="flex items-center gap-2">
+                            <Brain size={14} className="text-cyan-500" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider opacity-90 text-cyan-600 dark:text-cyan-400">
+                                MAIN_SYSTEM_KEY (KANANA)
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                onClose(); // 설정 모달을 닫고
+                                openKananaKeyModal(); // 카나나 키 모달을 엽니다.
+                            }}
+                            className={clsx(
+                                "px-3 py-1.5 text-[9px] font-bold rounded transition-all shadow-sm",
+                                isDark ? "bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/40" : "bg-cyan-600 text-white hover:bg-cyan-700"
+                            )}
+                        >
+                            UPDATE KEY
+                        </button>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 relative">
@@ -91,14 +148,25 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                         </div>
                     </div>
 
+                    {/* API Key Input (Local Storage) */}
+                    <div className="space-y-1">
+                        <label className="text-[9px] font-bold uppercase opacity-50 flex items-center gap-1"><Key size={10} /> API_KEY (LOCAL)</label>
+                        <input type="password" 
+                            placeholder={`Enter ${providers.find(p => p.id === provider)?.name || 'Provider'} API Key`}
+                            value={agentApiKey}
+                            onChange={(e) => {
+                                setAgentApiKey(e.target.value);
+                                try {
+                                    const keys = JSON.parse(localStorage.getItem('AGENT_API_KEYS') || '{}');
+                                    if (!keys[selectedAgent]) keys[selectedAgent] = {};
+                                    keys[selectedAgent][provider] = e.target.value;
+                                    localStorage.setItem('AGENT_API_KEYS', JSON.stringify(keys));
+                                } catch {}
+                            }}
+                            className={clsx("w-full h-9 px-3 rounded border text-[11px] outline-none focus:border-blue-500", isDark ? "bg-black border-gray-700" : "bg-white border-slate-300")} />
+                    </div>
+
                     <div className="space-y-3">
-                        {provider !== 'mock' && (
-                            <div className="space-y-1">
-                                <label className="text-[9px] font-bold uppercase opacity-50 flex items-center gap-1"><Key size={10} /> API_KEY</label>
-                                <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-                                    className={clsx("w-full h-9 px-3 rounded border text-[11px] outline-none focus:border-blue-500", isDark ? "bg-black border-gray-700 text-blue-400" : "bg-white border-slate-300")} />
-                            </div>
-                        )}
                         <div className="space-y-1">
                             <label className="text-[9px] font-bold uppercase opacity-50 flex items-center gap-1"><Cpu size={10} /> MODEL_OVERRIDE</label>
                             <input type="text" value={model} onChange={e => setModel(e.target.value)} placeholder="e.g. gpt-4-turbo"

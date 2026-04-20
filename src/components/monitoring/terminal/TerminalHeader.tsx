@@ -1,9 +1,10 @@
 // src/components/monitoring/terminal/TerminalHeader.tsx
 import React from 'react';
 import clsx from 'clsx';
-import { Brain, Lightbulb, Activity, Save, ArrowDownCircle, VolumeX, Volume2, ChevronDown } from 'lucide-react';
+import { Brain, Lightbulb, Activity, Save, ArrowDownCircle, VolumeX, Volume2, ChevronDown, X } from 'lucide-react';
 import { Tooltip } from '@/components/common/Tooltip';
 import { THEME_COLORS } from './terminalConfigs';
+import { useUIStore } from '@/store/useUIStore';
 
 interface TerminalHeaderProps {
   isDark: boolean; filter: string; isAiMode: boolean; isCollapsed: boolean; autoScroll: boolean; isAdminMuted: boolean;
@@ -15,6 +16,7 @@ export const TerminalHeader: React.FC<TerminalHeaderProps> = ({
   isDark, filter, isAiMode, isCollapsed, autoScroll, isAdminMuted,
   setFilter, setIsCollapsed, setAutoScroll, toggleAdminMute, saveLogs
 }) => {
+  const setTerminalOpen = useUIStore(s => s.setTerminalOpen);
   const theme = (isAiMode || filter === 'insight') ? THEME_COLORS.insight : 
                 filter === 'proposal' ? THEME_COLORS.proposal : 
                 filter === 'exec' ? THEME_COLORS.exec : null;
@@ -87,6 +89,11 @@ export const TerminalHeader: React.FC<TerminalHeaderProps> = ({
           className="p-1.5 rounded hover:bg-white/10 text-current shrink-0"
         >
           <ChevronDown size={15} className={clsx("transition-transform duration-300", isCollapsed && "rotate-180")} />
+        </button>
+        <button onClick={() => setTerminalOpen(false)} className={clsx(
+          "p-1.5 rounded transition-colors duration-200 hover:bg-red-500/20 text-gray-500 hover:text-red-500"
+        )}>
+          <X size={14} />
         </button>
       </div>
     </div>

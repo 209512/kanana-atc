@@ -22,9 +22,9 @@ export const TacticalItem = memo(({ agent }: Props) => {
     } = useTacticalActions();
 
     const { isLocked, isPaused, isForced, isPriority, isOverride } = useAgentLogic(agent, state);
-    const isAiProposed = state.pendingProposals?.some(
+    const isAiProposed = Array.from(state.pendingProposals?.values() || []).some(
         p => p.targetId === agent.id || p.targetId === agent.displayId || p.targetId === agent.uuid
-    ) ?? false;
+    );
 
     return (
         <div className={clsx(
@@ -63,7 +63,6 @@ export const TacticalItem = memo(({ agent }: Props) => {
                         onTogglePause={onTogglePause}
                         onTerminate={terminateAgent}
                         onTransferLock={onTransferLock}
-                        isAiProposed={isAiProposed}
                         tooltipPosition="left"
                     />
                 </div>

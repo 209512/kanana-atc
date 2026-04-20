@@ -17,7 +17,6 @@ interface AgentActionButtonsProps {
     layout?: 'row' | 'compact';
     showLabels?: boolean;
     tooltipPosition?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-left' | 'bottom-right';
-    isAiProposed?: boolean;
 }
 
 // AI 제안 시 공통 스타일: 하늘색 글로우 및 맥동 효과
@@ -56,16 +55,25 @@ const getActionButtonClass = (active: boolean, colorClass: string, hoverClass: s
 
 export const AgentActionButtons = ({
     agent, state, onTogglePriority, onTogglePause, onTerminate, onTransferLock, onStartRename,
-    layout = 'row', showLabels = false, tooltipPosition = 'bottom',
-    isAiProposed
+    showLabels = false, tooltipPosition = 'bottom', layout
 }: AgentActionButtonsProps) => {
     const { isLocked, isPaused, isPriority } = useAgentLogic(agent, state);
     const isGlobalStopped = !!state.globalStop;
     const targetUuid = agent.uuid || agent.id; 
     
-    // AI 제안 확인 로직 (배열에서 현재 에이전트용 액션을 찾음)
-    const proposals = state.pendingProposals || [];
-    const myProposal = proposals.find(p => p.targetId === targetUuid || p.targetId === agent.displayId);
+    // AI 제안 확인 로직 (Map 구조에서 O(1) 탐색으로 최적화)
+    const proposalsMap = state.pendingProposals;
+    
+    // Map에서 uuid나 displayId를 키로 가진 제안을 찾습니다.
+    let myProposal = undefined;
+    if (proposalsMap) {
+        for (const p of proposalsMap.values()) {
+            if (p.targetId === targetUuid || p.targetId === agent.displayId) {
+                myProposal = p;
+                break;
+            }
+        }
+    }
     
     // 개별 액션 매칭
     const isPauseProposed = myProposal?.action === 'PAUSE';
@@ -80,6 +88,7 @@ export const AgentActionButtons = ({
     return (
         <div className={clsx(
             "flex items-center gap-1", 
+            layout === 'compact' ? "justify-end w-full" : "",
             isThisAgentTarget && "bg-sky-500/10 rounded-lg p-0.5 ring-1 ring-sky-500/20"
         )}>
             {/* Rename Button */}

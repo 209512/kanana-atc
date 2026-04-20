@@ -1,19 +1,29 @@
 // src/hooks/agent/useTacticalActions.ts
 import { useState, useCallback } from 'react';
-import { useATC } from '@/hooks/system/useATC';
-import { useUI } from '@/hooks/system/useUI';
-import { Agent } from '@/contexts/atcTypes'; 
+import { useATCStore } from '@/store/useATCStore';
+import { useUIStore } from '@/store/useUIStore';
+import { Agent } from '@/contexts/atcTypes';
+import { useAgentMutations } from '@/hooks/api/useAgentMutations';
 
 export const useTacticalActions = () => {
-    const { 
-        agents, state, togglePause, 
-        renameAgent: submitRename,
-        terminateAgent: apiTerminate, 
-        togglePriority: apiTogglePriority, transferLock, 
-        playClick, playAlert, toggleGlobalStop: apiToggleGlobalStop, markAction
-    } = useATC();
+    const agents = useATCStore(s => s.agents);
+    const state = useATCStore(s => s.state);
+    const playClick = useATCStore(s => s.playClick);
+    const playAlert = useATCStore(s => s.playAlert);
     
-    const { isDark, sidebarWidth, areTooltipsEnabled } = useUI();
+    const { 
+        togglePause, 
+        togglePriority, 
+        transferLock, 
+        terminateAgent, 
+        toggleGlobalStop, 
+        renameAgent,
+        updatePriorityOrder
+    } = useAgentMutations();
+    
+    const isDark = useUIStore(s => s.isDark);
+    const sidebarWidth = useUIStore(s => s.sidebarWidth);
+    const areTooltipsEnabled = useUIStore(s => s.areTooltipsEnabled);
     
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [newName, setNewName] = useState('');
@@ -33,41 +43,41 @@ export const useTacticalActions = () => {
         setNewName('');
     }, [playClick]);
 
-    const handleConfirmRename = useCallback(async (id: string) => {
+    const handleConfirmRename = useCallback((id: string) => {
         const trimmedName = newName.trim();
         if (!trimmedName) return handleCancelRename();
-
-        markAction(id, 'displayName', trimmedName);
         
-        try {
-            await submitRename(id, trimmedName);
-            setRenamingId(null);
-            setNewName('');
-        } catch (err) {
-            markAction(id, 'displayName', null);
-            if (playAlert) playAlert();
-        }
-    }, [newName, submitRename, markAction, playAlert, handleCancelRename]);
+        renameAgent.mutate({ uuid: id, newName: trimmedName }, {
+            onSuccess: () => {
+                setRenamingId(null);
+                setNewName('');
+            }
+        });
+    }, [newName, renameAgent, handleCancelRename]);
         
-    const togglePriority = useCallback((id: string) => {
-        apiTogglePriority(id);
-    }, [apiTogglePriority]);
+    const onTogglePriority = useCallback((id: string) => {
+        togglePriority.mutate(id);
+    }, [togglePriority]);
 
     const onTogglePause = useCallback((agentId: string) => {
-        togglePause(agentId);
+        togglePause.mutate(agentId);
     }, [togglePause]);
 
     const handleTerminate = useCallback((id: string) => {
-        apiTerminate(id);
-    }, [apiTerminate]);
+        terminateAgent.mutate(id);
+    }, [terminateAgent]);
 
     const onTransferLock = useCallback((id: string) => {
-        transferLock(id);
+        transferLock.mutate(id);
     }, [transferLock]);
 
     const handleToggleGlobalStop = useCallback(() => {
-        apiToggleGlobalStop();
-    }, [apiToggleGlobalStop]);
+        toggleGlobalStop.mutate();
+    }, [toggleGlobalStop]);
+
+    const handleUpdatePriorityOrder = useCallback((order: string[]) => {
+        updatePriorityOrder.mutate(order);
+    }, [updatePriorityOrder]);
 
     return {
         agents, 
@@ -80,9 +90,10 @@ export const useTacticalActions = () => {
         toggleGlobalStop: handleToggleGlobalStop, 
         onTogglePause, 
         terminateAgent: handleTerminate, 
-        togglePriority, 
+        togglePriority: onTogglePriority, 
         onTransferLock, 
-        submitRename,
+        submitRename: (id: string, name: string) => renameAgent.mutate({ uuid: id, newName: name }),
+        updatePriorityOrder: handleUpdatePriorityOrder,
         playAlert 
     };
 };

@@ -1,46 +1,60 @@
 // src/hooks/agent/useAgentSettings.ts
 import { useState, useEffect } from 'react';
-import { useATC } from '@/hooks/system/useATC';
-import { useUI } from '@/hooks/system/useUI';
+import { useATCStore } from '@/store/useATCStore';
+import { useUIStore } from '@/store/useUIStore';
+import { logger } from '@/utils/logger';
+import { useAgentMutations } from '../api/useAgentMutations';
 
 export const useAgentSettings = (onClose: () => void) => {
-    const { agents = [], updateAgentConfig } = useATC();
-    const { isDark, areTooltipsEnabled, setAreTooltipsEnabled } = useUI();
+    const agents = useATCStore(s => s.agents) || [];
+    const { updateAgentConfig } = useAgentMutations();
+    const { isDark, areTooltipsEnabled, setAreTooltipsEnabled } = useUIStore();
     
     const [selectedAgent, setSelectedAgent] = useState<string>(agents[0]?.id || '');
     const [provider, setProvider] = useState('mock');
-    const [apiKey, setApiKey] = useState('');
     const [model, setModel] = useState('');
     const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI.');
     const [isLoading, setIsLoading] = useState(false);
 
-    const API_URL = '';
+    const API_URL = import.meta.env.VITE_API_BASE_URL || '';
 
     useEffect(() => {
         if (!selectedAgent || selectedAgent === "Select") return;
+        const abortController = new AbortController();
 
         const loadConfig = async () => {
             try {
-                const response = await fetch(`${API_URL}/api/agents/${encodeURIComponent(selectedAgent)}/config`);
+                const response = await fetch(`${API_URL}/api/agents/${encodeURIComponent(selectedAgent)}/config`, {
+                    signal: abortController.signal
+                });
 
                 if (response.status === 404) {
-                    setProvider('mock');
-                    setModel('');
-                    setSystemPrompt('You are a helpful AI traffic controller.');
+                    if (!abortController.signal.aborted) {
+                        setProvider('mock');
+                        setModel('');
+                        setSystemPrompt('You are a helpful AI traffic controller.');
+                    }
                     return; 
                 }
 
                 if (response.ok) {
                     const data = await response.json();
-                    setProvider(data.provider || 'mock');
-                    setModel(data.model || '');
-                    setSystemPrompt(data.systemPrompt || 'You are a helpful AI traffic controller.');
+                    if (!abortController.signal.aborted) {
+                        setProvider(data.provider || 'mock');
+                        setModel(data.model || '');
+                        setSystemPrompt(data.systemPrompt || 'You are a helpful AI traffic controller.');
+                    }
                 }
-            } catch (err) {
-                console.error("[ATC_SYSTEM] Network connection failed.");
+            } catch (err: unknown) {
+                if (err instanceof Error && err.name === 'AbortError') return;
+                logger.error("[ATC_SYSTEM] Network connection failed:", err);
             }
         };
         loadConfig();
+        
+        return () => {
+            abortController.abort();
+        };
     }, [selectedAgent, API_URL]);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -49,14 +63,12 @@ export const useAgentSettings = (onClose: () => void) => {
 
         setIsLoading(true);
         try {
-            await updateAgentConfig(selectedAgent, { 
-                provider, 
-                apiKey, 
-                model: model.trim(), 
-                systemPrompt 
+            await updateAgentConfig.mutateAsync({ 
+                uuid: selectedAgent, 
+                config: { provider, model: model.trim(), systemPrompt } 
             });
         } catch (err) {
-            console.error("SYNC_ERROR:", err);
+            logger.error("SYNC_ERROR:", err);
         } finally {
             setIsLoading(false);
             onClose();
@@ -66,7 +78,7 @@ export const useAgentSettings = (onClose: () => void) => {
     return {
         agents, isDark, areTooltipsEnabled, setAreTooltipsEnabled,
         selectedAgent, setSelectedAgent, provider, setProvider,
-        apiKey, setApiKey, model, setModel, systemPrompt, setSystemPrompt,
+        model, setModel, systemPrompt, setSystemPrompt,
         isLoading, handleSubmit
     };
 };

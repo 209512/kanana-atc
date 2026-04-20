@@ -2,24 +2,27 @@
 export const ATC_CONFIG = {
   // 리스크 및 분석 임계치
   RISK: {
-    LOAD_THRESHOLD: 70,
-    LATENCY_THRESHOLD: 100,
+    LOAD_THRESHOLD: Number(import.meta.env?.VITE_LOAD_THRESHOLD) || 70,
+    LATENCY_THRESHOLD: Number(import.meta.env?.VITE_LATENCY_THRESHOLD) || 100,
     MAX_SCORE: 100,
     PENALTY_COLLISION: 25,
     PENALTY_DENSITY: 5,
     HISTORY_LIMIT: 10,
-    COOL_DOWN_MS: 2500,
+    COOL_DOWN_MS: Number(import.meta.env?.VITE_COOL_DOWN_MS) || 2500,
     TREND_WINDOW: 3,
     TREND_MAX_AGE: 7000,
-    EMERGENCY_LEVEL: 85,
+    EMERGENCY_LEVEL: Number(import.meta.env?.VITE_EMERGENCY_LEVEL) || 85,
   },
 
   // 시뮬레이터 및 네트워크 타이밍
   SIMULATOR: {
-    STREAM_INTERVAL: 100,
+    STREAM_INTERVAL: Number(import.meta.env?.VITE_STREAM_INTERVAL) || 100,
     BASE_URL: '/api',
-    LOCK_DURATION: 5000,
+    LOCK_DURATION: Number(import.meta.env?.VITE_LOCK_DURATION) || 5000,
     TRANSFER_DELAY: 800,
+    API_TIMEOUT: 60000,
+    API_RETRIES: 0,
+    API_BACKOFF: 300,
     COLORS: {
       DEFAULT: '#3b82f6',
       OVERRIDE: '#ef4444',
@@ -30,13 +33,16 @@ export const ATC_CONFIG = {
   },
   
   AI: {
-    DEFAULT_QUOTA: 20,
-    THINKING_AGENT: "KANANA-O",
+    DEFAULT_QUOTA: Number(import.meta.env?.VITE_AI_QUOTA) || 20,
+    THINKING_AGENT: 'AGENT-THINKING',
     NETWORK_AGENT: "NETWORK",
-    SYSTEM_AGENT: "SYSTEM",
+    SYSTEM_AGENT: 'AGENT-SYSTEM',
   },
 
   // 로그
+  LOGS: {
+    MAX_DISPLAY: 1000,
+  },
   LOG_MSG: {
     // [TERMINATE/SCALE]
     TERMINATING: (name: string) => `❌ NODE_OFFLINE: TERMINATED_[${name}]`,
@@ -88,6 +94,8 @@ export const ATC_CONFIG = {
     AI_PROPOSALS_FOUND: (count: number) => `🤖 AI_PROPOSALS: ${count}_ACTIONS_DETECTED`,
     
     // 네트워크 에러
+    ERR_400: "🚫 AI_ERR: BAD_REQUEST (CHECK_FORMAT)",
+    ERR_401: "🔒 AI_ERR: INVALID_API_KEY",
     ERR_429: "🚫 AI_LIMIT: RATE_LIMIT_EXCEEDED",
     ERR_500: "🔥 AI_BUSY: SERVER_OVERLOAD",
     ERR_504: "⏳ AI_TIMEOUT: GATEWAY_TIMEOUT",
@@ -96,9 +104,9 @@ export const ATC_CONFIG = {
 
   // 자율 주행 레벨
   LEVELS: {
-    NORMAL: 30,
-    CAUTION: 70,
-    EMERGENCY: 95,
+    NORMAL: Number(import.meta.env?.VITE_LEVEL_NORMAL) || 30,
+    CAUTION: Number(import.meta.env?.VITE_LEVEL_CAUTION) || 70,
+    EMERGENCY: Number(import.meta.env?.VITE_LEVEL_EMERGENCY) || 95,
   }
 } as const;
 

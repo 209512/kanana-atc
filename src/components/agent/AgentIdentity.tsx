@@ -1,9 +1,9 @@
 // src/components/agent/AgentIdentity.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Check, X } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useATC } from '@/hooks/system/useATC';
+import { useATCStore } from '@/store/useATCStore';
 import { useAgentLogic } from '@/hooks/agent/useAgentLogic';
 import { getAgentTextStyle } from '@/utils/agentStyles';
 import { RenameButton } from '@/components/common/AgentActionButtons';
@@ -26,14 +26,22 @@ export const AgentIdentity = ({
     agent, state, isDark, isRenaming, newName, setNewName,
     onStartRename, onConfirm, onCancel, showRenameButton = true
 }: AgentIdentityProps) => {
-    const { playAlert, agents, renameAgent } = useATC(); 
+    const playAlert = useATCStore(s => s.playAlert); 
     const { isLocked, isForced, isOverride } = useAgentLogic(agent, state);
     const [isShaking, setIsShaking] = useState(false);
+    const shakeTimer = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (shakeTimer.current) clearTimeout(shakeTimer.current);
+        };
+    }, []);
 
     const triggerError = useCallback(() => {
         setIsShaking(true);
         if (playAlert) playAlert();
-        setTimeout(() => setIsShaking(false), 400);
+        if (shakeTimer.current) clearTimeout(shakeTimer.current);
+        shakeTimer.current = setTimeout(() => setIsShaking(false), 400);
     }, [playAlert]);
 
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,6 +131,17 @@ export const AgentIdentity = ({
                         )}>
                             {agent.displayId || agent.id}
                         </span>
+                        {agent.provider === 'gemini' && (
+                (agent as any).state?.isTactical ? (
+                    <span className="ml-2 px-1.5 py-0.5 rounded border bg-red-500/10 text-red-500 border-red-500/50 text-[10px] h-4 flex items-center justify-center animate-pulse font-bold">
+                        TACTICAL
+                    </span>
+                ) : (
+                    <span className="ml-2 px-1.5 py-0.5 rounded border bg-blue-500/10 text-blue-500 border-blue-500/30 text-[10px] h-4 flex items-center justify-center">
+                        GEMINI
+                    </span>
+                )
+            )}
                         {showRenameButton && (
                             <RenameButton 
                                 onClick={(e) => { 

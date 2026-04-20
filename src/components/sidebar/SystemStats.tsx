@@ -1,39 +1,48 @@
 // src/components/sidebar/SystemStats.tsx
-import React, { useState, useEffect, useMemo } from 'react'; 
+import React, { useState, useMemo, useRef, useEffect, Suspense, lazy } from 'react'; 
 import clsx from 'clsx';
 import { Cpu, Radio, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Radar } from '@/components/monitoring/radar';
 import { Tooltip } from '@/components/common/Tooltip';
-import { useATC } from '@/hooks/system/useATC';
-import { useUI } from '@/hooks/system/useUI';
+import { useATCStore } from '@/store/useATCStore';
+import { useUIStore } from '@/store/useUIStore';
+import { useAgentMutations } from '@/hooks/api/useAgentMutations';
+
+const Radar = lazy(() => import('@/components/monitoring/radar').then(module => ({ default: module.Radar })));
 
 export const SystemStats = () => {
-    const { state, setTrafficIntensity, playClick, playAlert } = useATC();
-    const { isDark, viewMode, setViewMode } = useUI();
-    const [sliderValue, setSliderValue] = useState(2);
+    const state = useATCStore(s => s.state);
+    const playClick = useATCStore(s => s.playClick);
+    const playAlert = useATCStore(s => s.playAlert);
+    
+    const { scaleAgents } = useAgentMutations();
+
+    const isDark = useUIStore(s => s.isDark);
+    const viewMode = useUIStore(s => s.viewMode);
+    const setViewMode = useUIStore(s => s.setViewMode);
     const [isBouncing, setIsBouncing] = useState(false);
+    const bounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (bounceTimer.current) clearTimeout(bounceTimer.current);
+        };
+    }, []);
 
     const priorityAgentsCount = useMemo(() => (state.priorityAgents || []).length, [state.priorityAgents]);
     const minRequired = Math.max(1, priorityAgentsCount);
-
-    useEffect(() => {
-        if (state.trafficIntensity !== undefined) {
-            setSliderValue(state.trafficIntensity);
-        }
-    }, [state.trafficIntensity]);
+    const currentValue = useATCStore(s => s.agents).length || 1;
 
     const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = parseInt(e.target.value);
         if (val < minRequired) {
             setIsBouncing(true);
             playAlert?.();
-            setSliderValue(minRequired);
-            setTrafficIntensity(minRequired);
-            setTimeout(() => setIsBouncing(false), 300);
+            scaleAgents.mutate(minRequired);
+            if (bounceTimer.current) clearTimeout(bounceTimer.current);
+            bounceTimer.current = setTimeout(() => setIsBouncing(false), 300);
         } else {
-            setSliderValue(val);
-            setTrafficIntensity(val);
+            scaleAgents.mutate(val);
         }
     };
 
@@ -61,7 +70,7 @@ export const SystemStats = () => {
                     <div className="flex-1" />
                     {/* 경고 문구 */}
                     <AnimatePresence>
-                        {sliderValue <= minRequired && priorityAgentsCount > 0 && (
+                        {currentValue <= minRequired && priorityAgentsCount > 0 && (
                             <motion.span 
                                 initial={{ opacity: 0, x: 5 }} 
                                 animate={{ opacity: 1, x: 0 }} 
@@ -75,23 +84,22 @@ export const SystemStats = () => {
                     
                     {/* n/10 수치 */}
                     <div className="shrink-0">
-                        <Tooltip content={`Active Slots: ${state.trafficIntensity} / 10`} position="bottom-left">
+                        <Tooltip content={`Active Slots: ${currentValue}`} position="bottom-left">
                             <span className={clsx(
                                 "text-xs font-mono font-bold cursor-default", 
                                 isDark ? "text-blue-400" : "text-blue-600"
                             )}>
-                                {sliderValue|| 0}/10
+                                {currentValue} / 20
                             </span>
                         </Tooltip>
                     </div>
                 </div>
 
-                {/* 슬라이더 제어 영역 */}
                 <div className="px-1 flex flex-col justify-center grow">
                     <motion.div animate={isBouncing ? { x: [0, -4, 4, -2, 2, 0] } : {}} className="w-full">
                         <input 
-                            type="range" min="1" max="10" step="1"
-                            value={sliderValue}
+                            type="range" min="1" max="20" step="1"
+                            value={currentValue}
                             onChange={handleSliderChange}
                             className={clsx(
                                 "w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-blue-500 transition-all",
@@ -101,7 +109,7 @@ export const SystemStats = () => {
                     </motion.div>
                     <div className={clsx("flex justify-between text-[8px] font-mono mt-1 opacity-50 shrink-0 whitespace-nowrap", isDark ? "text-gray-400" : "text-slate-500")}>
                         <span>MIN: 1</span>
-                        <span>MAX: 10</span>
+                        <span>MAX: 20</span>
                     </div>
                 </div>
             </div>
@@ -121,7 +129,9 @@ export const SystemStats = () => {
                 </div>
                 <div className={clsx("h-48 rounded-lg overflow-hidden border relative transition-all duration-500 shrink-0", isDark ? "border-gray-800 bg-black/40" : "border-slate-200 bg-slate-100/50")}>
                     {viewMode === 'attached' ? (
-                        <Radar compact={true} key="sidebar-radar" />
+                        <Suspense fallback={<div className="w-full h-full bg-black/40 flex items-center justify-center text-[10px] text-white/50 font-mono">LOADING_RADAR...</div>}>
+                            <Radar compact={true} key="sidebar-radar" />
+                        </Suspense>
                     ) : (
                         <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center gap-2">
                             <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white/80 animate-spin" />

@@ -1,8 +1,10 @@
 // src/components/command/AutonomyController.tsx
-import { useATC } from '@/hooks/system/useATC';
+import { useATCStore } from '@/store/useATCStore';
 
 export const AutonomyController: React.FC = () => {
-  const { state, autonomyLevel, riskScore } = useATC();
+  const state = useATCStore(s => s.state);
+  const autonomyLevel = useATCStore(s => s.autonomyLevel);
+  const riskScore = useATCStore(s => s.riskScore);
 
   return (
     <div className="p-4 bg-black/60 border-b border-blue-500/20 backdrop-blur-md">
