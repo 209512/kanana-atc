@@ -26,8 +26,8 @@ async function enableMocking() {
   const isVercel = window.location.hostname.includes('vercel.app');
   const forceMock = import.meta.env.VITE_USE_MSW === 'true';
 
-  // import.meta.env.DEV를 통해 빌드 시 모킹 관련 코드가 트리쉐이킹되도록 보장합니다.
-  if (import.meta.env.DEV && (isLocal || isVercel || forceMock)) {
+  // VITE_USE_MSW=true 이면 프로덕션 빌드라도 MSW를 강제로 포함시킵니다 (CI/CD E2E 테스트용)
+  if ((import.meta.env.DEV && (isLocal || isVercel)) || forceMock) {
     const { worker } = await import('./mocks/browser');
     const { http, HttpResponse } = await import('msw');
     
