@@ -25,3 +25,10 @@ dist-ssr
 .vercel
 .env*.local
 .env
+
+# Testing and Build Artifacts
+playwright-report/
+playwright/.cache/
+test-results/
+storybook-static/
+coverage/
