@@ -3,8 +3,8 @@ import React from 'react';
 import { Star, Shield, Play, Pause } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import clsx from 'clsx';
-import { useATC } from '@/hooks/system/useATC';
-import { useUI } from '@/hooks/system/useUI';
+import { useATCStore } from '@/store/useATCStore';
+import { useUIStore } from '@/store/useUIStore';
 import { useTacticalActions } from '@/hooks/agent/useTacticalActions';
 import { useCategorizedAgents } from '@/hooks/agent/useCategorizedAgents';
 import { AgentCard } from '@/components/sidebar/AgentCard';
@@ -12,12 +12,15 @@ import { Agent } from '@/contexts/atcTypes';
 import { Tooltip } from '@/components/common/Tooltip';
 
 export const AgentList = () => {
-    const { state, updatePriorityOrder } = useATC();
-    const { selectedAgentId, setSelectedAgentId, isDark } = useUI();
+    const state = useATCStore(s => s.state);
+    
+    const selectedAgentId = useUIStore(s => s.selectedAgentId);
+    const setSelectedAgentId = useUIStore(s => s.setSelectedAgentId);
+    const isDark = useUIStore(s => s.isDark);
     const { 
         onTogglePause, onTransferLock, togglePriority, terminateAgent,
         renamingId, newName, setNewName, handleStartRename, handleCancelRename, handleConfirmRename,
-        toggleGlobalStop 
+        toggleGlobalStop, updatePriorityOrder 
     } = useTacticalActions();
 
     const { priorityAgents, normalAgents, priorityIds } = useCategorizedAgents();
@@ -75,7 +78,7 @@ export const AgentList = () => {
                             <Star size={10} fill="currentColor"/> Priority Stack
                         </label>
                     </Tooltip>
-                    <Reorder.Group axis="y" values={priorityIds} onReorder={updatePriorityOrder} className="space-y-1">
+                    <Reorder.Group axis="y" values={priorityAgents.map((a: Agent) => a.uuid || a.id)} onReorder={updatePriorityOrder} className="space-y-1">
                         {priorityAgents.map((agent: Agent) => renderAgentItem(agent, true))}
                     </Reorder.Group>
                 </section>
@@ -90,7 +93,7 @@ export const AgentList = () => {
                     
                     <Reorder.Group 
                         axis="y" 
-                        values={normalAgents.map((a: Agent) => a.id)} 
+                        values={normalAgents.map((a: Agent) => a.uuid || a.id)} 
                         onReorder={() => {}} 
                         className="space-y-1"
                     >

@@ -1,9 +1,27 @@
 // src/utils/audioService.ts
+import { logger } from './logger';
+
 class AudioService {
   private ctx: AudioContext | null = null;
   private lastPlayTime: number = 0;
   private readonly MIN_INTERVAL = 0.05;
   private isActivated: boolean = false;
+
+  private audioQueue: Array<{ type: 'pcm' | 'tts', data: string, sampleRate?: number, lang?: string }> = [];
+  private isPlayingQueue: boolean = false;
+  private onPlayStateChange: ((isPlaying: boolean) => void) | null = null;
+  private nextStartTime: number = 0;
+
+  public setPlayStateCallback(callback: (isPlaying: boolean) => void) {
+    this.onPlayStateChange = callback;
+  }
+
+  private setPlayingState(state: boolean) {
+    this.isPlayingQueue = state;
+    if (this.onPlayStateChange) {
+      this.onPlayStateChange(state);
+    }
+  }
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -12,6 +30,10 @@ class AudioService {
         if (context.state === 'suspended') {
           context.resume().then(() => {
             this.isActivated = true;
+            window.removeEventListener('click', initAudio);
+          }).catch((err) => {
+            logger.error("AudioContext resume failed:", err);
+            // Failed to resume, but we should remove the listener to avoid infinite errors on each click
             window.removeEventListener('click', initAudio);
           });
         } else {
@@ -23,9 +45,96 @@ class AudioService {
     }
   }
 
+  private async processQueue() {
+    if (this.isPlayingQueue || this.audioQueue.length === 0) return;
+    this.setPlayingState(true);
+
+    while (this.audioQueue.length > 0) {
+      const task = this.audioQueue.shift();
+      if (!task) continue;
+
+      try {
+        if (task.type === 'pcm') {
+          await this._playPCM(task.data, task.sampleRate || 24000);
+        } else if (task.type === 'tts') {
+          await this._playTTS(task.data, task.lang);
+        }
+      } catch (err) {
+        logger.error("Audio playback error:", err);
+      }
+    }
+
+    this.setPlayingState(false);
+  }
+
+  private _playPCM(base64Data: string, sampleRate: number): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.isActivated) return resolve();
+      const ctx = this.getContext();
+      
+      try {
+        const binaryString = window.atob(base64Data);
+        const len = binaryString.length;
+        const bytes = new Int16Array(len / 2);
+        
+        // DataView를 활용하여 실행 환경의 엔디안(Endianness) 설정에 관계없이 
+        // 항상 리틀 엔디안(true)으로 안전하게 16-bit PCM 데이터를 파싱합니다.
+        const buffer = new ArrayBuffer(len);
+        const view = new DataView(buffer);
+        for (let i = 0; i < len; i++) {
+          view.setUint8(i, binaryString.charCodeAt(i));
+        }
+        for (let i = 0; i < len; i += 2) {
+          bytes[i / 2] = view.getInt16(i, true);
+        }
+
+        const audioBuffer = ctx.createBuffer(1, bytes.length, sampleRate);
+        const channelData = audioBuffer.getChannelData(0);
+        for (let i = 0; i < bytes.length; i++) {
+          channelData[i] = bytes[i] / 32768.0;
+        }
+
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+
+        const currentTime = ctx.currentTime;
+        if (this.nextStartTime < currentTime) {
+          this.nextStartTime = currentTime;
+        }
+        
+        source.start(this.nextStartTime);
+        
+        this.nextStartTime += audioBuffer.duration;
+
+        source.onended = () => resolve();
+      } catch (e) {
+        logger.warn("Failed to play PCM audio:", e);
+        resolve();
+      }
+    });
+  }
+
+  private _playTTS(text: string, lang: string = 'ko-KR'): Promise<void> {
+    return new Promise((resolve) => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang;
+        utterance.rate = 1.1;
+        utterance.pitch = 1.0;
+        utterance.onend = () => resolve();
+        utterance.onerror = () => resolve();
+        window.speechSynthesis.speak(utterance);
+      } else {
+        resolve();
+      }
+    });
+  }
+
   private getContext() {
     if (!this.ctx) {
-      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     }
     return this.ctx;
   }
@@ -56,37 +165,27 @@ class AudioService {
       oscillator.start(now);
       oscillator.stop(now + duration);
     } catch (e) {
+      logger.warn("Audio playback error in play method:", e);
     }
   }
   
   /**
-   * 카나나 API에서 온 Base64 PCM 데이터를 재생
+   * 카나나 API에서 온 Base64 PCM 데이터를 큐에 넣고 재생
    * @param base64Data PCM 데이터
    * @param sampleRate 카나나 표준 24000Hz
    */
   async playPCM(base64Data: string, sampleRate: number = 24000) {
-    if (!this.isActivated) return;
-    const ctx = this.getContext();
-    
-    // Base64를 ArrayBuffer로 변환
-    const binaryString = window.atob(base64Data);
-    const len = binaryString.length;
-    const bytes = new Int16Array(len / 2);
-    for (let i = 0; i < len; i += 2) {
-      bytes[i / 2] = (binaryString.charCodeAt(i + 1) << 8) | binaryString.charCodeAt(i);
-    }
+    this.audioQueue.push({ type: 'pcm', data: base64Data, sampleRate });
+    this.processQueue();
+  }
 
-    // AudioBuffer 생성 및 재생
-    const audioBuffer = ctx.createBuffer(1, bytes.length, sampleRate);
-    const channelData = audioBuffer.getChannelData(0);
-    for (let i = 0; i < bytes.length; i++) {
-      channelData[i] = bytes[i] / 32768.0; // PCM 16bit Float 변환
-    }
-
-    const source = ctx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(ctx.destination);
-    source.start();
+  /**
+   * 브라우저 내장 Web Speech API를 사용하여 텍스트 읽어주기 (Lite Version) 큐에 넣고 재생
+   * @param text 읽어줄 텍스트
+   */
+  playTTS(text: string, lang: string = 'ko-KR') {
+    this.audioQueue.push({ type: 'tts', data: text, lang });
+    this.processQueue();
   }
 }
 

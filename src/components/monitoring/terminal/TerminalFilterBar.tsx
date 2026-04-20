@@ -1,5 +1,5 @@
 // src/components/monitoring/terminal/TerminalFilterBar.tsx
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { Info } from 'lucide-react';
 import { Tooltip } from '@/components/common/Tooltip';
@@ -15,6 +15,14 @@ interface FilterBarProps {
 
 export const TerminalFilterBar = ({ isDark, filter, excludedTypes, onFilterClick, onFilterDoubleClick }: FilterBarProps) => {
   const clickTimer = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimer.current) {
+        clearTimeout(clickTimer.current);
+      }
+    };
+  }, []);
 
   const handleAction = (val: string, type: 'single' | 'double') => {
     if (type === 'double') {

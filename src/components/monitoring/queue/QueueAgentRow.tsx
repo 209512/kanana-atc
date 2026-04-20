@@ -4,14 +4,14 @@ import clsx from 'clsx';
 import { Activity, Star, Zap } from 'lucide-react';
 import { Tooltip } from '@/components/common/Tooltip';
 import { getAgentCardStyle, getAgentTextStyle } from '@/utils/agentStyles';
-import { Agent } from '@/contexts/atcTypes';
+import { Agent, ATCState } from '@/contexts/atcTypes';
 
 interface AgentRowProps {
   agent: Agent;
   index: number;
   type: 'master' | 'priority' | 'queue';
   isDark: boolean;
-  state: any;
+  state: ATCState;
   aiProposed: boolean;
 }
 
@@ -59,10 +59,10 @@ export const AgentRow = memo(({
           "font-mono truncate max-w-[120px]", 
           isMaster && "text-emerald-500 font-bold",
           getAgentTextStyle({
-            isForced: state.forcedCandidate === agent.id,
+            isForced: (state as any).forcedCandidate === agent.id,
             isLocked: isMaster,
             isDark,
-            overrideSignal: state.overrideSignal
+            overrideSignal: (state as any).overrideSignal
           })
         )}>
           {agent.displayId || agent.id}

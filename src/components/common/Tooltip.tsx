@@ -1,8 +1,8 @@
 // src/components/common/Tooltip.tsx
-import React, { useState, useRef, useEffect, useContext } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
-import { UIContext } from '@/contexts/UIProvider';
+import { useUIStore } from '@/store/useUIStore';
 
 interface TooltipProps {
     children: React.ReactNode;
@@ -21,9 +21,8 @@ export const Tooltip: React.FC<TooltipProps> = ({
 }) => {
     const [isVisible, setIsVisible] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0 });
-    const uiContext = useContext(UIContext);
-    const isDark = uiContext?.isDark ?? true;
-    const areTooltipsEnabled = uiContext?.areTooltipsEnabled ?? true;
+    const isDark = useUIStore(s => s.isDark);
+    const areTooltipsEnabled = useUIStore(s => s.areTooltipsEnabled);
 
     const triggerRef = useRef<HTMLDivElement>(null);
     const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -66,6 +65,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
         return () => { 
             window.removeEventListener('scroll', updatePosition, true); 
             window.removeEventListener('resize', updatePosition); 
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
     }, [isVisible]);
 

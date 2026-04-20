@@ -1,15 +1,92 @@
 // src/components/sidebar/SidebarHeader.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import clsx from 'clsx';
-import { ShieldAlert, Activity, Settings, Volume2, VolumeX } from 'lucide-react';
+import { ShieldAlert, Activity, Settings, Volume2, VolumeX, Camera, Loader2 } from 'lucide-react';
 import { Tooltip } from '@/components/common/Tooltip';
-import { useATC } from '@/hooks/system/useATC';
-import { useUI } from '@/hooks/system/useUI';
+import { useATCStore } from '@/store/useATCStore';
+import { useUIStore } from '@/store/useUIStore';
+import html2canvas from 'html2canvas';
+import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
+import { logger } from '@/utils/logger';
 
 export const SidebarHeader = ({ onOpenSettings }: { onOpenSettings: () => void }) => {
-    const { state, isAdminMuted, toggleAdminMute } = useATC();
-    const { isDark, setIsDark } = useUI();
-    const isHuman = state.holder && state.holder.includes('Human');
+    const { i18n } = useTranslation();
+    const holder = useATCStore(s => s.state.holder);
+    const isAdminMuted = useATCStore(s => s.isAdminMuted);
+    const toggleAdminMute = useATCStore(s => s.toggleAdminMute);
+    
+    const isDark = useUIStore(s => s.isDark);
+    const setIsDark = useUIStore(s => s.setIsDark);
+    const overrideSignal = useATCStore(s => s.state.overrideSignal);
+    
+    const isHuman = holder === 'USER' || overrideSignal;
+    const [isCapturing, setIsCapturing] = useState(false);
+
+    const handleCapture = React.useCallback(async () => {
+        if (isCapturing) return;
+        setIsCapturing(true);
+        const toastId = toast.loading('Capturing screen...');
+
+        try {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            const targetElement = document.getElementById('atc-dashboard') || document.body;
+            const canvas = await html2canvas(targetElement, {
+                backgroundColor: isDark ? '#000000' : '#ffffff',
+                useCORS: true,
+                scale: window.devicePixelRatio || 2,
+                logging: false,
+                ignoreElements: (element) => {
+                    if (element.id === 'sonner-toast-container') return true;
+                    return false;
+                }
+            });
+
+            canvas.toBlob((blob) => {
+                if (!blob) {
+                    toast.error('Failed to capture screen.', { id: toastId });
+                    setIsCapturing(false);
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64data = reader.result as string;
+                    if (useATCStore.getState().isAiMode) {
+                        window.dispatchEvent(new CustomEvent('ATTACH_IMAGE', { detail: base64data }));
+                        toast.success('Screenshot attached to Command Center.', { id: toastId });
+                    } else {
+                        const a = document.createElement('a');
+                        a.href = base64data;
+                        a.download = `kanana-atc-capture-${new Date().getTime()}.png`;
+                        a.click();
+                        toast.success('Screenshot saved successfully.', { id: toastId });
+                    }
+                };
+                reader.readAsDataURL(blob);
+                
+                setIsCapturing(false);
+            }, 'image/png', 1.0);
+
+        } catch (error) {
+            logger.error('Capture failed:', error);
+            toast.error('An error occurred during capture.', { id: toastId });
+            setIsCapturing(false);
+        }
+    }, [isCapturing, isDark]);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 's' || e.key === 'S')) {
+                e.preventDefault();
+                handleCapture();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleCapture]);
     
     return (
         <div className={clsx(
@@ -23,7 +100,7 @@ export const SidebarHeader = ({ onOpenSettings }: { onOpenSettings: () => void }
                 <div className="min-w-0">
                     <h2 className="font-bold text-sm tracking-wide min-w-0">
                         <Tooltip content="Main Control Panel" position="bottom">
-                            TRAFFIC CONTROL
+                            {i18n.t('app.title', 'TRAFFIC CONTROL')}
                         </Tooltip>
                     </h2>
                     <div className="flex items-center gap-2 text-[10px] opacity-60 font-mono min-w-0">
@@ -33,6 +110,19 @@ export const SidebarHeader = ({ onOpenSettings }: { onOpenSettings: () => void }
                 </div>
             </div>
             <div className="flex items-center gap-0.5">
+                <Tooltip content="Screenshot (Ctrl+Shift+S)" position="bottom">
+                    <button 
+                        onClick={handleCapture} 
+                        disabled={isCapturing}
+                        className={clsx(
+                            "p-2 rounded-md hover:bg-white/10 transition-colors",
+                            isCapturing ? "text-sky-500" : "text-gray-400 hover:text-white"
+                        )}
+                    >
+                        {isCapturing ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+                    </button>
+                </Tooltip>
+
                 <Tooltip content={isAdminMuted ? "Unmute Audio" : "Mute Audio"} position="bottom">
                     <button onClick={toggleAdminMute} className={clsx(
                         "p-2 rounded-md transition-colors",
@@ -43,13 +133,13 @@ export const SidebarHeader = ({ onOpenSettings }: { onOpenSettings: () => void }
                 </Tooltip>
                 
                 <Tooltip content="Toggle Theme" position="bottom">
-                    <button onClick={() => setIsDark(!isDark)} className="p-2 rounded-md hover:bg-white/10 text-lg">
+                    <button onClick={() => setIsDark(!isDark)} className="p-2 rounded-md hover:bg-white/10 transition-colors text-lg">
                         {isDark ? "🌙" : "☀️"}
                     </button>
                 </Tooltip>
 
                 <Tooltip content="System Settings" position="bottom-left">
-                    <button onClick={onOpenSettings} className="p-2 rounded-md hover:bg-blue-500/20 text-gray-400">
+                    <button onClick={onOpenSettings} className="p-2 rounded-md hover:bg-blue-500/20 transition-colors text-gray-400">
                         <Settings size={16} />
                     </button>
                 </Tooltip>

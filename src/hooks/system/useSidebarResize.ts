@@ -1,7 +1,7 @@
 // src/hooks/system/useSidebarResize.ts
 import React, { useState, useEffect, useRef } from 'react';
 
-export const useSidebarResize = (initialWidth: number, setWidth: (w: number) => void) => {
+export const useSidebarResize = (_initialWidth: number, setWidth: (w: number) => void) => {
     const [isResizing, setIsResizing] = useState(false);
     const sidebarRef = useRef<HTMLDivElement>(null);
     const resizerRef = useRef<HTMLDivElement>(null);

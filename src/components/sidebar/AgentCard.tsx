@@ -6,10 +6,12 @@ import { Reorder, AnimatePresence, motion } from 'framer-motion';
 import { AgentStatusBadge } from '@/components/common/AgentStatusBadge';
 import { AgentActionButtons } from '@/components/common/AgentActionButtons';
 import { getAgentCardStyle } from '@/utils/agentStyles';
-import { useATC } from '@/hooks/system/useATC';
+import { useATCStore } from '@/store/useATCStore';
 import { useAgentLogic } from '@/hooks/agent/useAgentLogic';
 import { AgentIdentity, AgentMetrics, AgentLogs } from '@/components/agent';
 import { Agent, ATCState, LogEntry } from '@/contexts/atcTypes';
+
+import { useTranslation } from 'react-i18next';
 
 interface AgentCardProps {
     agent: Agent;
@@ -34,16 +36,17 @@ export const AgentCard = ({
     agent, state, isDark, isSelected, isPrioritySection, renamingId, newName, setNewName,
     onSelect, onStartRename, onConfirmRename, onCancelRename, onTogglePause, onTransferLock, onTogglePriority, onTerminate
 }: AgentCardProps) => {
-    const { playClick } = useATC();
+    const { t } = useTranslation();
+    const playClick = useATCStore(s => s.playClick);
     const { isLocked, isPaused, isForced, isPriority, isOverride } = useAgentLogic(agent, state);
-    const isAiProposed = state.pendingProposals?.some(
-        p => p.targetId === agent.id || p.targetId === agent.uuid
-    ) ?? false;
+    const isAiProposed = Array.from(state.pendingProposals?.values() || []).some(
+        p => p.targetId === agent.id || p.targetId === agent.uuid || p.targetId === agent.displayId
+    );
 
     const filteredLogs = useMemo(() => {
         if (!isSelected) return [];
 
-        const allLogs = state?.logs || [];
+        const allLogs = state.logs || [];
         const myId = String(agent.id);
         const myDisplayName = agent.displayId || myId;
 
@@ -53,11 +56,11 @@ export const AgentCard = ({
             const isMeMentioned = msg.includes(myId.toUpperCase()) || msg.includes(myDisplayName.toUpperCase());
             return logAgentId === myId || (['system', 'policy'].includes(logAgentId.toLowerCase()) && isMeMentioned);
         });
-    }, [state?.logs, agent.id, agent.displayId, isSelected]);
+    }, [state.logs, agent.id, agent.displayId, isSelected]);
 
     return (
         <Reorder.Item 
-            value={agent.id} 
+            value={agent.uuid || agent.id} 
             dragListener={isPrioritySection} 
             className="list-none relative touch-none"
         >
@@ -118,12 +121,19 @@ export const AgentCard = ({
                         />
                         <span className="truncate opacity-60 font-mono text-[9px]">{agent.activity || "IDLE"}</span>
                     </div>
-                    <span className={clsx(
-                        "px-1.5 py-0.5 rounded font-mono text-[9px] border font-bold uppercase shrink-0 min-w-[65px] text-center", 
-                        isDark ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200"
-                    )}>
-                        {agent.model}
-                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                        {agent.provider === 'gemini' && (
+                            <span className="px-1 py-0.5 rounded font-mono text-[8px] border font-bold uppercase bg-purple-500/10 text-purple-400 border-purple-500/20" title={t('agent.gemini_connected', 'Gemini Connected')}>
+                                GEMINI
+                            </span>
+                        )}
+                        <span className={clsx(
+                            "px-1.5 py-0.5 rounded font-mono text-[9px] border font-bold uppercase shrink-0 min-w-[65px] text-center", 
+                            isDark ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-200"
+                        )}>
+                            {agent.model}
+                        </span>
+                    </div>
                 </div>
                 
                 <AnimatePresence>
@@ -135,7 +145,9 @@ export const AgentCard = ({
                             className="overflow-hidden"
                         >
                             <div className="mt-3 pt-3 border-t border-white/10">
-                                <AgentMetrics isDark={isDark} />
+                                <div className="mb-3">
+                                    <AgentMetrics isDark={isDark} />
+                                </div>
                                 <AgentLogs logs={filteredLogs} isDark={isDark} isSelected={isSelected} />
                             </div>
                         </motion.div>

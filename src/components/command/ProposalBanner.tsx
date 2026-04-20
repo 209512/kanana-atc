@@ -1,18 +1,19 @@
-import React, { useContext } from 'react';
-import { ATCContext } from '@/contexts/ATCProvider';
+// src/components/command/ProposalBanner.tsx
+import React from 'react';
+import { useATCStore } from '@/store/useATCStore';
 import { AlertTriangle, Check, X, Zap } from 'lucide-react';
 import clsx from 'clsx';
-import { useUI } from '@/hooks/system/useUI';
+import { useUIStore } from '@/store/useUIStore';
 import { THEME_COLORS } from '@/components/monitoring/terminal/terminalConfigs';
 
 export const ProposalBanner = () => {
-    const { isDark } = useUI();
-    const context = useContext(ATCContext);
-    if (!context || !context.pendingProposals || context.pendingProposals.length === 0) return null;
+    const isDark = useUIStore(s => s.isDark);
+    const { pendingProposals, approveProposals, rejectProposals, agents } = useATCStore();
 
-    const { pendingProposals, approveProposals, rejectProposals, agents } = context;
-    const primaryProposal = pendingProposals[0];
-    const theme = THEME_COLORS.proposal; // 터미널과 동일한 테마 참조
+    if (!pendingProposals || pendingProposals.size === 0) return null;
+    
+    const primaryProposal = Array.from(pendingProposals.values())[0];
+    const theme = THEME_COLORS.proposal;
 
     const targetAgent = agents?.find(a => {
         const searchId = primaryProposal.targetId?.trim().toUpperCase();
@@ -26,7 +27,7 @@ export const ProposalBanner = () => {
         : (targetAgent?.displayName || primaryProposal.targetId);
     
     return (
-        <div className="w-[450px] animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div data-testid="proposal-banner" className="w-[450px] animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div 
                 className={clsx(
                     "border rounded-xl overflow-hidden backdrop-blur-md transition-all duration-300",
@@ -74,12 +75,12 @@ export const ProposalBanner = () => {
 
                 {/* 액션 버튼 */}
                 <div className={clsx("grid grid-cols-2 border-t", isDark ? "border-white/5" : "border-slate-100")}>
-                    <button onClick={rejectProposals} className="py-3 text-[11px] font-bold text-zinc-500 hover:bg-red-500/10 hover:text-red-500 transition-colors flex items-center justify-center gap-2">
+                    <button data-testid="proposal-ignore-btn" onClick={rejectProposals} className="py-3 text-[11px] font-bold text-zinc-500 hover:bg-red-500/10 hover:text-red-500 transition-colors flex items-center justify-center gap-2">
                         <X size={14} /> IGNORE
                     </button>
-                    <button onClick={approveProposals} className={clsx(
+                    <button data-testid="proposal-authorize-btn" onClick={approveProposals} className={clsx(
                         "py-3 text-[11px] font-bold transition-colors flex items-center justify-center gap-2 border-l",
-                        theme.base, // 텍스트 컬러 통일
+                        theme.base,
                         isDark ? "border-white/5 hover:bg-white/5" : "border-slate-100 hover:bg-black/5"
                     )}>
                         <Check size={14} /> AUTHORIZE EXECUTION

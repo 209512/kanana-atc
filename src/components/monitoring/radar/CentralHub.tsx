@@ -17,7 +17,7 @@ interface CentralHubProps {
 }
 
 export const CentralHub = ({ isLocked, isOverride, holder, isDark, agents, isAiMode }: CentralHubProps) => {
-    const ref = useRef<any>(null!);
+    const ref = useRef<THREE.Group>(null!);
 
     const hubColor = useMemo(() => {
         if (isOverride) return LOG_LEVELS.critical.color;
@@ -65,18 +65,14 @@ export const CentralHub = ({ isLocked, isOverride, holder, isDark, agents, isAiM
                     <div 
                         className={clsx(
                             "font-black tracking-tighter whitespace-nowrap transition-all duration-300",
-                            "text-[10px] uppercase", // 대문자로 고정하여 정갈함 유지
-                            // 1. 기본 가독성을 위한 강력한 텍스트 그림자 (Shadow)
+                            "text-[10px] uppercase",
                             "drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]", 
                             isAiMode ? (
-                                // 2. AI 모드: 하늘색 글씨 + 네온 글로우 효과
                                 "text-sky-400 shadow-sky-500/50 brightness-125 scale-110"
                             ) : (
-                                // 3. 일반 모드: 흰색(혹은 다크모드 대응색) + 대비 강화
                                 isDark ? "text-white/90" : "text-black/90"
                             )
                         )}
-                        // 인라인 스타일로 더 정밀한 외곽선(Text Stroke) 효과 추가
                         style={{ textShadow: '0px 0px 4px rgba(0,0,0,0.9)' }}
                     >
                         {isAiMode ? "KANANA-O" : "CORE"}

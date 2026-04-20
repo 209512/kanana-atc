@@ -1,32 +1,61 @@
 // src/components/command/CommandCenter.tsx
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import clsx from 'clsx';
-import { Send, Brain, Mic, MicOff, Loader2 } from 'lucide-react';
+import { Send, Brain, Mic, MicOff, Loader2, Image as ImageIcon, X } from 'lucide-react';
 import { useCommandCenter } from '@/hooks/system/useCommandCenter';
-import { useUI } from '@/hooks/system/useUI';
-import { useATC } from '@/hooks/system/useATC';
+import { useATCStore } from '@/store/useATCStore';
+import { useUIStore } from '@/store/useUIStore';
 import { Tooltip } from '@/components/common/Tooltip';
 import { useSTT } from '@/hooks/system/useSTT';
 
 export const CommandCenter = () => {
-    const { isDark } = useUI();
-    const { isAiMode } = useATC();
-    const { inputValue, setInputValue, isAnalyzing, handleAnalyze } = useCommandCenter();
+    const { isDark } = useUIStore();
+    const openKananaKeyModal = useUIStore(s => s.openKananaKeyModal);
+    const isAiMode = useATCStore(s => s.isAiMode);
+    const { inputValue, setInputValue, isAnalyzing, handleAnalyze, attachedImage, setAttachedImage } = useCommandCenter();
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [baseInputValue, setBaseInputValue] = useState("");
+
+    const checkAndExecute = (action: () => void) => {
+        const kananaKey = sessionStorage.getItem('KANANA_API_KEY') || localStorage.getItem('KANANA_API_KEY');
+        if (!kananaKey) {
+            openKananaKeyModal();
+            return;
+        }
+        action();
+    };
 
     const { isListening, toggleListening, hasSupport } = useSTT((text) => {
-        setInputValue(text);
+        // 기존에 타이핑된 텍스트(baseInputValue) 뒤에 음성 인식 텍스트를 이어붙임
+        setInputValue(baseInputValue ? `${baseInputValue} ${text}` : text);
     });
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey && isAiMode) { 
             e.preventDefault();
+            setBaseInputValue(""); // 전송 시 베이스 초기화
             handleAnalyze();
+        }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setAttachedImage(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
         }
     };
 
     return (
         <div className={clsx(
-            "w-full max-w-2xl px-4 transition-all duration-300",
+            "w-full max-w-2xl px-4 transition-all duration-300 command-center-container",
             !isAiMode && "opacity-60 grayscale-[0.5]"
         )}> 
             <div className={clsx(
@@ -53,7 +82,10 @@ export const CommandCenter = () => {
                 {/* Analyze 버튼 */}
                 <Tooltip content="Analyze Strategic Command (Enter)" position="top">
                     <button
-                        onClick={() => handleAnalyze()}
+                        onClick={() => checkAndExecute(() => {
+                            setBaseInputValue(""); // 전송 시 베이스 초기화
+                            handleAnalyze();
+                        })}
                         disabled={!isAiMode || isAnalyzing || isListening}
                         className={clsx(
                             "group flex items-center gap-2 px-4 py-3 rounded-xl font-bold text-[11px] transition-all overflow-hidden relative shrink-0",
@@ -67,26 +99,78 @@ export const CommandCenter = () => {
                 </Tooltip>
 
                 {/* 입력창 */}
-                <div className="flex-1 relative">
-                    <input
-                        type="text"
+                <div className="flex-1 relative flex items-center">
+                    {attachedImage && (
+                        <div className="relative shrink-0 mr-2">
+                            <img src={attachedImage} alt="Attached" className="h-8 w-8 object-cover rounded-md border border-zinc-500/30" />
+                            <button 
+                                onClick={() => setAttachedImage(null)}
+                                className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 hover:scale-110 transition-transform shadow-md"
+                            >
+                                <X size={10} />
+                            </button>
+                        </div>
+                    )}
+                    <textarea
                         value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder={!isAiMode ? "AI Link is required for commands..." : isListening ? "Listening..." : "Enter strategic command..."}
+                        onChange={(e) => {
+                            setInputValue(e.target.value);
+                            if (!isListening) {
+                                setBaseInputValue(e.target.value); // 타이핑할 때마다 베이스 갱신
+                            }
+                            e.target.style.height = 'auto'; // Reset before measuring
+                            const newHeight = Math.min(Math.max(e.target.scrollHeight, 40), 120);
+                            e.target.style.height = `${newHeight}px`;
+                            e.target.style.overflowY = newHeight >= 120 ? 'auto' : 'hidden';
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey && isAiMode) { 
+                                e.preventDefault();
+                                checkAndExecute(() => {
+                                    setBaseInputValue(""); // 전송 시 베이스 초기화
+                                    handleAnalyze();
+                                    // Reset height after analyze
+                                    e.currentTarget.style.height = 'auto';
+                                    e.currentTarget.style.overflowY = 'hidden';
+                                });
+                            }
+                        }}
+                        placeholder={!isAiMode ? "System Link Offline..." : isListening ? "Listening..." : "Enter strategic command..."}
                         disabled={!isAiMode || isAnalyzing}
+                        rows={1}
                         className={clsx(
-                            "w-full bg-transparent px-2 py-3 text-xs focus:outline-none transition-colors",
+                            "w-full bg-transparent px-2 py-2.5 text-[13px] focus:outline-none transition-colors resize-none custom-scrollbar leading-snug",
                             isDark 
                                 ? "text-white placeholder-zinc-500" 
                                 : "text-slate-900 placeholder-slate-500 font-medium",
                             !isAiMode && "cursor-not-allowed"
                         )}
+                        style={{ overflowY: 'hidden' }}
                     />
                 </div>
 
-                {/* STT */}
+                {/* 첨부파일 및 STT */}
                 <div className="flex items-center gap-1 pr-1">
+                    <Tooltip content="Attach Image" position="top">
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={!isAiMode || isAnalyzing}
+                            className={clsx(
+                                "p-2.5 rounded-lg transition-all",
+                                !isAiMode ? "text-zinc-800" : "text-zinc-500 hover:bg-black/5 hover:text-sky-500"
+                            )}
+                        >
+                            <ImageIcon size={18} />
+                        </button>
+                    </Tooltip>
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        accept="image/*" 
+                        onChange={handleFileChange} 
+                    />
+                    
                     {hasSupport && (
                         <Tooltip content={isListening ? "Stop STT" : "Start Voice Input"} position="top">
                             <button 
