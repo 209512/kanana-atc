@@ -68,8 +68,7 @@ export const useCommandCenter = () => {
         // 첨부된 이미지가 있으면 user 메시지에 이미지 추가
         let finalImage = attachedImage;
         
-        // 4. "중간의 텍스트 로그 단계를 생략하고, Kanana-O가 드론의 바이너리 상태 데이터를 직접 스트리밍으로 읽어들이는 방식으로 진화"
-        // 명시적으로 캡처된 이미지가 없더라도, 항상 현재 레이더의 상태를 캡처하여 Kanana-O에게 바이너리 데이터(이미지)로 전송
+        // ACTION: Sync global radar context via direct sensor stream or user attachment
         if (!finalImage) {
           const canvas = document.querySelector('canvas');
           if (canvas) {
@@ -82,10 +81,7 @@ export const useCommandCenter = () => {
           if (userMsgIndex !== -1) {
             const textContent = fullPrompt[userMsgIndex].content as string;
             
-            // 만약 사용자가 이미지를 직접 첨부했다면 (attachedImage가 있다면), 
-            // 이는 "드론의 시야(Local Camera)"가 아니라 사용자가 첨부한 "외부 상황" 이미지일 가능성이 큼
-            // 반면 레이더 캡처 화면은 "관제탑의 전역 시야(Global Radar)"임.
-            // 두 시야의 한계를 프롬프트에 명시적으로 구분하여 제공
+            // CONDITION: Differentiate Global Radar VS Local Camera context for LLM
             const isRadarCapture = finalImage !== attachedImage;
             const contextNote = isRadarCapture 
               ? "[DIRECT_SENSOR_STREAM_ACTIVE] 이 이미지는 개별 드론의 카메라(Local)가 아닌, 관제탑의 전역 레이더(Global) 시각 캡처본입니다. 점이 겹쳐 보이거나 문제가 없는 상황이라면, 반드시 텍스트로 전달된 개별 드론 센서 로그(<radar_data>)를 최우선으로 신뢰하여 판단하세요."
@@ -171,7 +167,7 @@ export const useCommandCenter = () => {
             addLog(msg, "insight", AI.THINKING_AGENT);
           }
 
-          // 오디오 처리 (Kanana-O 오디오 직접 활용 or Web Speech API)
+          // ACTION: Fallback to Web Speech API if Kanana Audio is disabled
           if (!import.meta.env.VITE_USE_KANANA_AUDIO || import.meta.env.VITE_USE_KANANA_AUDIO !== 'true') {
             if (report) {
               // Lite Version (Web Speech API)
@@ -194,7 +190,7 @@ export const useCommandCenter = () => {
         
         let finalLog = LOG_MSG.ERR_GENERIC(errMsg.substring(0, 20)) || t('error.generic');
         
-        // 에러코드 명세 반영
+        // MAPPING: Parse error codes to localized strings
         if (errMsg.includes("MISSING_API_KEY")) finalLog = "AI 기능을 활성화하려면 Kanana-o API Key가 필요합니다.";
         else if (errMsg.includes("INVALID_API_KEY")) finalLog = "유효하지 않은 키입니다. 콘솔에서 키를 다시 확인하세요.";
         else if (errMsg.includes("QUOTA")) finalLog = "금일 이용 쿼터를 모두 소진했습니다. 내일 00시에 초기화됩니다.";
@@ -231,7 +227,7 @@ export const useCommandCenter = () => {
       }
     }, [isAiMode, inputValue, agents, state, isAiAutoMode, addLog, playClick, playAlert, approveProposals, setState, attachedImage, LOG_MSG, AI, i18n.language, t, triggerVisualHaptic]);
     
-    // 워커 스레드나 타 시스템 파트에서 발생하는 AUTO_ANALYZE_TRIGGER 이벤트를 감지하여 자동 분석 실행 (Silent Failure 해결)
+    // EVENT: Trigger global analysis loop
   useEffect(() => {
     const handleAutoAnalyze = (e: Event) => {
       const customEvent = e as CustomEvent<string>;

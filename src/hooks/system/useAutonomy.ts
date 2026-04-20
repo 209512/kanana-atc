@@ -82,8 +82,7 @@ export const useAutonomy = (state: ATCState, agents: Agent[], addLog: any) => {
         const newRiskLevel = Math.round(riskScore / 10);
         const currentRiskLevel = (useATCStore.getState().state as any)?.risk_level;
         
-        // 값이 변경된 경우에만 상태를 업데이트하여 무한 리렌더링 루프 방지 (논리 오류 해결)
-        // 불변성(Immutability)을 준수하여 새로운 상태 객체를 반환하도록 수정 (State Mutation 오류 해결)
+        // NOTE: Prevents infinite render loop & complies with immutability
         if (currentRiskLevel !== newRiskLevel) {
           useATCStore.setState((s: any) => ({
             state: { ...s.state, risk_level: newRiskLevel }
