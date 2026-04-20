@@ -21,7 +21,7 @@ jobs:
         run: npm ci
         
       - name: Run Chromatic
-        uses: chromaui/action@latest
+        uses: chromaui/action@v1
         with:
           # Chromatic project token is required. Add this in GitHub Repository Secrets.
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
