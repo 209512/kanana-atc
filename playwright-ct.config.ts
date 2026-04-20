@@ -7,7 +7,7 @@ const __dirname = dirname(__filename);
 
 export default defineConfig({
   testDir: './src/components',
-  testMatch: '**/*.spec.tsx',
+  testMatch: '**/*.ct.spec.tsx',
   snapshotDir: './__snapshots__',
   timeout: 10 * 1000,
   fullyParallel: true,
