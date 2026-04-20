@@ -86,9 +86,7 @@ export default async function handler(req: Request, executionCtx?: any) {
     const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
     const hasRedis = !!(upstashUrl && upstashToken);
 
-    // [중요 수정] Kanana-o API FAQ 및 개발 가이드라인에 맞춘 파라미터 구조
-    // latency_first는 extra_body 하위에 위치해야 함.
-    // streaming 옵션은 latency_first와 결합하여 첫 청크 반환속도를 높이기 위해 필요함
+    // FIXME: Dynamic parameter mapping required by API specification
     const requestBody: any = {
       model: model,
       messages: maskedMessages,
@@ -128,8 +126,7 @@ export default async function handler(req: Request, executionCtx?: any) {
               "Authorization": `Bearer ${apiKey}`
             },
             body: JSON.stringify(requestBody),
-            // Vercel Edge 무료 티어 최대 실행 시간(10초)을 고려하여
-            // 컨테이너가 504 에러로 뻗기 전에 안전하게 실패 처리(Fail-fast)를 하도록 수정
+            // TODO: Timeout limits for Vercel Edge Free Tier
             signal: AbortSignal.timeout(9500) 
           });
 
@@ -202,7 +199,7 @@ export default async function handler(req: Request, executionCtx?: any) {
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify(requestBody),
-      // Vercel Edge 무료 티어(10초)에서 Vercel Timeout(504) 발생 전에 자체 타임아웃
+      // TODO: Timeout limits for Vercel Edge Free Tier
       signal: AbortSignal.timeout(9500)
     });
 
