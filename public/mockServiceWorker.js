@@ -1,4 +1,3 @@
-// public/mockServiceWorker.js
 /* eslint-disable */
 /* tslint:disable */
 
