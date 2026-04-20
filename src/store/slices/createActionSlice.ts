@@ -43,7 +43,7 @@ export const createActionSlice: StateCreator<
     const targetId = uuid ? String(uuid) : 'SYSTEM_GLOBAL';
     
     set((s) => {
-      // 새로운 Set과 Map을 생성하여 불변성을 유지하고 React 리렌더링을 트리거합니다.
+      // Immutable state updates for React rendering
       const newDeletedIds = new Set(s.deletedIds);
       const newFieldLocks = new Map(s.fieldLocks);
       
