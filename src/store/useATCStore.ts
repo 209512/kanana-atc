@@ -14,7 +14,7 @@ export const useATCStore = create<ATCStore>()((...a) => {
     ...createCoreSlice(...a),
     ...createAiSlice(...a),
     ...createActionSlice(...a),
-    lastKnownGoodActions: [], // Add last known good actions array for fallback
+    lastKnownGoodActions: [], // Fallback actions
     setLastKnownGoodActions: (actions: any[]) => set({ lastKnownGoodActions: actions }),
     metrics: {
       totalAiCalls: 0,
@@ -36,7 +36,7 @@ export const useATCStore = create<ATCStore>()((...a) => {
   } as any;
 });
 
-// E2E 테스트를 위해 window 객체에 store 노출 (개발 또는 테스트 환경에서만)
+// Window global expose for E2E testing
 if (typeof window !== 'undefined' && import.meta.env.MODE !== 'production') {
   if (typeof window !== 'undefined') {
     (window as unknown as { useATCStore: unknown }).useATCStore = useATCStore;

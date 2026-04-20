@@ -36,11 +36,11 @@ export const createCoreSlice: StateCreator<
       message, type, agentId
     };
     set((s) => {
-      // 배열 스프레드 연산자 제거 (가비지 컬렉션 최적화)
+      // GC optimization: slice instead of spread
       const logs = s.state.logs.slice();
       logs.push(newLog);
       if (logs.length > 1000) {
-        logs.shift(); // 오래된 로그 삭제
+        logs.shift(); // Evict oldest log
       }
       return { state: { ...s.state, logs } };
     });
