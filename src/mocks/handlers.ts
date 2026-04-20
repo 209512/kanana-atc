@@ -35,6 +35,11 @@ const lastActiveTimes = new Map<string, number>();
 export const handlers = [
   http.all('*/api/kanana', () => passthrough()),
   http.all('*/proxy/kanana', () => passthrough()),
+  http.all('*/api/kanana-poll', () => passthrough()),
+  http.all('*/api/init', () => passthrough()),
+  http.all('*/api/gemini', () => passthrough()),
+  http.all('*/api/openai', () => passthrough()),
+  http.all('*/api/anthropic', () => passthrough()),
 
   // 스트림 핸들러
   http.get('*/api/stream', () => {
@@ -44,6 +49,12 @@ export const handlers = [
     
     return new HttpResponse(new ReadableStream({
       start(controller) {
+        // [설계 오류 수정] MSW 메인 스레드 병목 해결: 
+        // 스트림 주기를 100ms(하드코딩)에서 최소 250ms~500ms(스케일링에 따른 가변)로 늦추어 
+        // 메인 스레드 연산 압박을 줄입니다. (UI 렌더링은 이미 워커와 R3F interpolation이 처리하므로 지장 없음)
+        const agentCount = simulator.agents.size;
+        const dynamicInterval = Math.max(250, Math.min(1000, agentCount * 5));
+        
         intervalId = setInterval(() => {
           simulator.update();
           const now = Date.now();
@@ -102,7 +113,7 @@ export const handlers = [
           } catch (e) { 
             clearInterval(intervalId); 
           }
-        }, SIMULATOR.STREAM_INTERVAL);
+        }, dynamicInterval);
       },
       cancel() {
         if (intervalId) clearInterval(intervalId);
@@ -279,6 +290,20 @@ export const handlers = [
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
 
+  // 디버그 이벤트 주입을 위한 핸들러
+  http.post('*/api/mock/inject-event', async ({ request }) => {
+    try {
+      const { targetId, eventType, severity } = await request.json() as any;
+      if (simulator.agents.has(targetId)) {
+        simulator.addLog(targetId, `[CONDITION:${eventType}] [RISK_LEVEL:${severity === 'CRITICAL' ? 9 : 5}]`, severity.toLowerCase());
+        return HttpResponse.json({ success: true });
+      }
+      return HttpResponse.json({ success: false }, { status: 404 });
+    } catch (e) {
+      return HttpResponse.json({ success: false }, { status: 400 });
+    }
+  }),
+
   // 글로벌 정지
   http.post('*/api/stop', async ({ request }) => {
     const { enable } = await request.json() as any;
@@ -354,7 +379,7 @@ export const handlers = [
     const { uuid } = params;
     if (simulator.agents.has(uuid as string)) {
       simulator.updateAgent(uuid as string, body.config);
-      simulator.addLog(uuid as string, LOG_MSG.CONFIG_UPDATED, "success");
+      simulator.addLog(uuid as string, LOG_MSG.CONFIG_UPDATED, "info");
     }
     return HttpResponse.json({ success: true });
   }),
