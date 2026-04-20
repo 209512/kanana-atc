@@ -1,0 +1,64 @@
+// src/workers/streamWorker.ts
+import { mergeAgentsWorker, mergeStateWorker, BufferedAgent, BufferedState } from './streamMerger.logic';
+import { Agent, ATCState } from '../contexts/atcTypes';
+
+// 워커 스레드는 이전 프레임의 상태(캐시)를 유지하여 불필요한 메인 스레드 직렬화/역직렬화를 줄입니다.
+let prevAgents: Agent[] = [];
+let prevState: ATCState = {
+  logs: [],
+  pendingProposals: new Map(),
+  overrideSignal: false,
+} as unknown as ATCState;
+
+self.onmessage = (event: MessageEvent) => {
+  const { type, payload } = event.data;
+
+  if (type === 'INIT_STATE') {
+    prevAgents = payload.agents || [];
+    if (payload.state) {
+      prevState = payload.state;
+    }
+  } else if (type === 'PROCESS_STREAM') {
+    try {
+      const { agents: bufferedAgents, state: bufferedState, now, deletedIds, fieldLocks } = payload as {
+        agents: BufferedAgent[];
+        state: BufferedState;
+        now: number;
+        deletedIds: string[];
+        fieldLocks: [string, [string, { value: string | boolean; expiry: number }][]][];
+      };
+      
+      let isAgentsUpdated = false;
+      let isStateUpdated = false;
+      const allLocksToDelete: { uuid: string; field: string }[] = [];
+
+      if (bufferedAgents) {
+        const { newAgents, locksToDelete } = mergeAgentsWorker(prevAgents, bufferedAgents, deletedIds, fieldLocks, now);
+        prevAgents = newAgents;
+        isAgentsUpdated = true;
+        allLocksToDelete.push(...locksToDelete);
+      }
+
+      if (bufferedState) {
+        const { newState, locksToDelete } = mergeStateWorker(prevState, bufferedState, fieldLocks, now);
+        prevState = newState;
+        isStateUpdated = true;
+        allLocksToDelete.push(...locksToDelete);
+      }
+
+      self.postMessage({
+        type: 'STREAM_PROCESSED',
+        payload: {
+          agents: isAgentsUpdated ? prevAgents : null,
+          state: isStateUpdated ? prevState : null,
+          locksToDelete: allLocksToDelete,
+        }
+      });
+    } catch (err) {
+      self.postMessage({ type: 'ERROR', payload: err instanceof Error ? err.message : 'Worker error' });
+    }
+  } else if (type === 'CLEAR_CACHE') {
+    prevAgents = [];
+    prevState = { logs: [], pendingProposals: new Map(), overrideSignal: false } as unknown as ATCState;
+  }
+};
