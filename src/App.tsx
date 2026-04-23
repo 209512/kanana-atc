@@ -54,8 +54,14 @@ const App = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isStarted, setIsStarted] = useState(false);
   const openKananaKeyModal = useUIStore(s => s.openKananaKeyModal);
+  const riskLevel = useATCStore(s => s.state?.risk_level || 0);
 
   useOfflineArchive(); // IndexedDB 기반 오프라인 아카이빙 적용
+
+  useEffect(() => {
+    // 앱 초기화 시 IndexedDB에 저장된 과거 Audit Logs 불러오기
+    useATCStore.getState().initAuditLogs?.();
+  }, []);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -75,7 +81,7 @@ const App = () => {
     };
   }, []);
 
-  if (!isStarted) {
+  if (!isStarted && !isOffline) {
     return (
       <div className="h-screen w-screen bg-[#05090a] flex flex-col items-center justify-center font-mono text-cyan-500 z-[9999] relative">
         <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-20 pointer-events-none" />
@@ -115,7 +121,8 @@ const App = () => {
       <KananaKeyModal />
       <div className={clsx(
         "h-screen w-screen font-sans relative overflow-hidden select-none", 
-        isDark ? "bg-[#05090a] text-gray-300" : "bg-[#f1f5f9] text-slate-800"
+        isDark ? "bg-[#05090a] text-gray-300" : "bg-[#f1f5f9] text-slate-800",
+        riskLevel > 8.5 && "emergency-pulse" // 85 (8.5) 초과 시 emergency-pulse 클래스 적용
       )}>
         {/* Offline Banner */}
         {isOffline && (
