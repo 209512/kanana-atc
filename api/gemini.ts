@@ -2,6 +2,7 @@
 import { withApiMiddleware } from './_middleware';
 import { logger } from './_logger';
 import { z } from 'zod';
+import { AI_PROVIDERS } from './_aiProviders';
 
 export const config = {
   runtime: 'edge',
@@ -56,8 +57,8 @@ export default async function handler(req: Request) {
     }
 
     const apiKey = (customGeminiKey || process.env.GEMINI_API_KEY || "").trim();
-    const model = (process.env.GEMINI_MODEL || "gemini-1.5-flash").trim();
-    const apiEndpoint = (process.env.GEMINI_ENDPOINT || "https://generativelanguage.googleapis.com/v1beta/models").trim();
+    const model = (process.env.GEMINI_MODEL || AI_PROVIDERS.GEMINI.DEFAULT_MODEL).trim();
+    const apiEndpoint = (process.env.GEMINI_ENDPOINT || AI_PROVIDERS.GEMINI.API_URL).trim();
 
     // 환경변수에 GEMINI_API_KEY가 없으면 백엔드에서 자체적으로 Mock(상태 변화 시뮬레이션)을 반환합니다.
     if (!apiKey) {
@@ -95,7 +96,7 @@ export default async function handler(req: Request) {
     // 외부 날씨 데이터가 없고, 기본값인 경우 wttr.in 호출 시도
     const isMock = process.env.VITE_USE_MOCK === 'true' || process.env.NODE_ENV !== 'production';
     if (!externalData?.weather && !isMock) {
-        const WTTR_URL = process.env.WTTR_URL;
+      const WTTR_URL = process.env.WTTR_URL;
       if (WTTR_URL) {
         try {
           const weatherRes = await fetch(WTTR_URL.replace('{region}', encodeURIComponent(region)), {
@@ -114,12 +115,14 @@ export default async function handler(req: Request) {
         } catch (error) {
           logger.warn(`[GEMINI_WEATHER_FETCH_ERR] Failed to fetch weather for ${region}`, error);
         }
+      } else {
+        logger.warn('[GEMINI_CONFIG] WTTR_URL is not set. Weather data will default to fallback values.');
       }
     }
 
     const safeAgentName = JSON.stringify(agentName || "Unknown");
-    const safeSystemPrompt = JSON.stringify(systemPrompt || 'DEFAULT_AGENT');
-    const safePersona = JSON.stringify(persona || 'GENERAL_RECON_DRONE');
+    const safeSystemPrompt = systemPrompt || 'DEFAULT_AGENT';
+    const safePersona = persona || 'GENERAL_RECON_DRONE';
 
     const weatherText = weather || "WEATHER_NORMAL";
     const economyText = economyStatus || "ECONOMY_STABLE";
@@ -133,12 +136,19 @@ export default async function handler(req: Request) {
       ? `🚨 [TACTICAL MODE ACTIVE] You are no longer just a sensor. You are a Tactical Field Commander. The risk level is critical (${currentRisk}/10). Analyze the environment and provide an actionable solution or warning in the 'strategy' field. Make sure to consider the visual input if provided.`
       : `🟢 [SENSOR MODE] You are a recon drone. The risk level is low/moderate (${currentRisk}/10). Focus on observing and reporting the current environment accurately. Do not suggest any strategies.`;
 
+    // Construct strict prompt incorporating the persona to guide Gemini's behavior
     const prompt = `
 <system_role>
 You are an advanced digital twin agent drone representing "${agentName || 'Agent'}".
 Your task is to analyze your current state, external data, and visual input (if provided) to report back to Kanana-o (The ATC Commander).
 ${modeDescription}
 </system_role>
+
+<agent_persona>
+Role/Persona: ${safePersona}
+System Prompt: ${safeSystemPrompt}
+Please strictly act and respond according to this persona.
+</agent_persona>
 
 <agent_info>
 Name: ${agentName || 'Unknown'}
@@ -201,7 +211,7 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
       }
     };
 
-    const finalUrl = `${apiEndpoint}/${model}:generateContent?key=${apiKey}`;
+    const finalUrl = `${apiEndpoint}/${model}:${AI_PROVIDERS.GEMINI.ACTION}?key=${apiKey}`;
 
     // 5. Exponential Backoff 재시도 로직 적용 (Gemini 1.5 Flash Rate Limit 방어)
     const MAX_RETRIES = 3;

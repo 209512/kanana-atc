@@ -23,8 +23,6 @@ export interface AiSlice {
   setRiskData: (riskScore: number, autonomyLevel: number) => void;
   approveProposals: () => Promise<void>;
   rejectProposals: () => void;
-  _executeSystemAction: (action: string, pVal: string | null) => Promise<void>;
-  _executeAgentAction: (action: string, actualUuid: string, pVal: string | null) => Promise<void>;
 }
 
 export interface ActionSlice {
@@ -73,5 +71,6 @@ export interface ATCStore extends CoreSlice, AiSlice, ActionSlice {
   recordMetric?: (type: 'call' | 'jailbreak' | 'parseFailure' | 'success') => void;
   auditLogs?: AuditLog[];
   addAuditLog?: (log: Omit<AuditLog, 'timestamp'>) => void;
+  initAuditLogs?: () => Promise<void>;
   isInitializing?: boolean; // 초기 스케일링 중복 방지 플래그
 }
