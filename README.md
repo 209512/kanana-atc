@@ -24,14 +24,14 @@
 ### 2. 🧠 전략적 사고 엔진 (`Kanana-o AI`)
 수동적인 질의응답을 벗어나, 직접 시스템 제어권을 행사하는 전략적 관제 AI 페르소나입니다.
 * **Cognitive Structure**: 모든 응답을 `<THOUGHT>`(추론), `<PREDICTION>`(예측), `<REPORT>`(브리핑) 단계로 구분하여 출력하는 사고 체계를 갖췄습니다.
-* **Transactional Action Tags**: `[ACTION:COMMAND:TARGET:VALUE]` 규격을 통해 분석부터 **12종의 시스템 명령 실행권**까지 동시에 확보합니다.
+* **Transactional Action Tags**: `[ACTION:COMMAND:TARGET:VALUE]` 규격을 통해 분석부터 **14종의 시스템 명령 실행권**까지 동시에 확보합니다.
 * **Adaptive ID Resolver**: AI가 UUID 대신 에이전트의 `displayName`으로 명령을 내려도 시스템이 이를 실시간 매칭하여 실행하는 유연한 식별 로직을 탑재했습니다.
 
 ### 3. 🛡️ 자율성 및 안전 가드레일
 AI의 오작동을 방지하고 시스템 안정성을 유지하는 다층적 보호막입니다.
-* **Weighted Risk Scoring**: 기체 부하(70% 임계치), 지연시간(100ms), 밀도를 가중치 합산하여 **실시간 위험 지수(0-100)** 를 산출합니다.
+* **Weighted Risk Scoring**: 기체 부하, 네트워크 지연시간, 밀도, 그리고 **에이전트 간 누적 충돌 횟수(Collision Penalty)**를 가중치 합산하여 **실시간 위험 지수(0-100)** 를 산출합니다.
 * **Trend Analysis (Delta Check)**: 조치 후 리스크 점수의 기울기(Slope)를 분석하여 상황 악화 시 즉시 `EARLY_EXIT` 및 **수동 모드(Handover)** 로 강제 전환합니다.
-* **Dynamic Autonomy Level**: 리스크에 따라 자율 주행 레벨을 가변 운영하여 인간과 AI의 주도권을 유연하게 조율합니다.
+* **Dynamic Autonomy Level**: 환경 변수로 조절 가능한 임계치를 기반으로 자율 주행 레벨을 가변 운영하여 인간과 AI의 주도권을 유연하게 조율합니다.
 
 ---
 
@@ -69,7 +69,7 @@ AI가 스스로 판단하고 행동하는 **Agentic Workflow** 시연입니다.
 graph TD
     subgraph "Frontend (React 19)"
         UI[ATC Dashboard] -->|Command/STT| API[atcApi Manager]
-        Radar[3D Radar] <-->|Autonomy/Risk| Store[ATC Provider]
+        Radar[3D Radar] <-->|Autonomy/Risk| Store[Zustand & EventBus]
         Store -->|Guardrail| Autonomy[useAutonomy Engine]
     end
 
@@ -97,12 +97,23 @@ graph TD
 git clone https://github.com/209512/kanana-atc.git
 cd kanana-atc
 
-# Install & Run
+# Install Dependencies
 npm install
+
+# Run Development Server
 npm run dev
 ```
+
+> **Note**: 본 프로젝트는 로컬 개발 시 별도의 `.env` 파일 설정 없이도 즉시 실행 가능합니다. `KANANA_API_KEY` 및 `GEMINI_API_KEY`는 UI 우측 상단의 **[CONNECT WITH AI]** 버튼을 통해 클라이언트 측 메모리에 안전하게 입력하고 테스트할 수 있습니다. (Zero-Configuration)
+
 * **Local URL**: http://localhost:5173
 * **Live Demo**: https://kanana-atc.vercel.app/
+
+### 🧪 Testing & Validation
+프로젝트의 신뢰성 검증을 위한 Vitest 기반의 단위/통합 테스트 스위트가 포함되어 있습니다.
+```bash
+npm run test
+```
 
 ---
 
