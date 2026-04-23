@@ -69,8 +69,9 @@ export const atcApi = {
     
     let resultPayload: any = null;
 
-    // request()는 stream: false일 경우 파싱된 JSON 객체를 반환하고, stream: true일 경우 Response 객체를 반환합니다.
-    if (response && response.job_id) {
+    // request()는 stream: false이거나 202 응답(Async Queue)일 경우 JSON 파싱된 객체를 반환합니다.
+    // response가 Response 객체(스트림)가 아니고, job_id 속성을 가진 일반 객체인지 확인합니다.
+    if (response && !(response instanceof Response) && response.job_id) {
       // Async Queue 모드 처리 (job_id 폴링)
       const jobId = response.job_id;
 

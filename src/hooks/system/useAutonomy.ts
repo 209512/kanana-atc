@@ -64,14 +64,14 @@ export const useAutonomy = (state: ATCState, agents: Agent[], addLog: any) => {
     }
   }, [riskScore, RISK.HISTORY_LIMIT]);
 
-  // Optional: Update risk level visual indicator
-  useEffect(() => {
-    if (riskScore > RISK.EMERGENCY_LEVEL) {
-      document.body.classList.add('emergency-pulse');
-    } else {
-      document.body.classList.remove('emergency-pulse');
-    }
-  }, [riskScore, RISK.EMERGENCY_LEVEL]);
+  // Optional: Update risk level visual indicator (Handled via App.tsx wrapper now)
+  // useEffect(() => {
+  //   if (riskScore > RISK.EMERGENCY_LEVEL) {
+  //     document.body.classList.add('emergency-pulse');
+  //   } else {
+  //     document.body.classList.remove('emergency-pulse');
+  //   }
+  // }, [riskScore, RISK.EMERGENCY_LEVEL]);
 
   // Gemini 에이전트의 모드 스위칭을 위해 시뮬레이터에 riskScore 전달
   useEffect(() => {

@@ -18,11 +18,8 @@ export const CommandCenter = () => {
     const [baseInputValue, setBaseInputValue] = useState("");
 
     const checkAndExecute = (action: () => void) => {
-        const kananaKey = sessionStorage.getItem('KANANA_API_KEY') || localStorage.getItem('KANANA_API_KEY');
-        if (!kananaKey) {
-            openKananaKeyModal();
-            return;
-        }
+        // 클라이언트 스토리지가 아닌, API가 먼저 호출된 뒤 서버의 401(Missing Key) 응답을 받았을 때 모달을 띄우는 것이 안전합니다.
+        // 현재는 환경변수로 키가 주입된 상황을 지원하기 위해, 클라이언트 키 검증을 생략하고 즉시 실행합니다.
         action();
     };
 
