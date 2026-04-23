@@ -33,12 +33,12 @@ export const useATCStore = create<ATCStore>()((...a) => {
       if (type === 'success') metrics.successfulActions += 1;
       return { metrics };
     }),
-    auditLogs: [], // UI 렌더링용 임시 상태 (실제 저장은 idbService에서 담당)
+    auditLogs: [], // Temporary UI state
     addAuditLog: (log: any) => {
-      // 1. 비동기로 IndexedDB에 안전하게 영구 저장 (메모리 오프로딩)
+      // IDB async save
       idbService.addAuditLog(log).catch(err => logger.error("IDB Add Error", err));
       
-      // 2. UI 즉각 반영을 위해 Zustand 메모리에는 최근 50개만 남기고 GC 유도
+      // Keep last 50 logs for UI (GC)
       set((s: any) => {
         const newLogs = [...(s.auditLogs || []), { ...log, timestamp: Date.now() }];
         return { auditLogs: newLogs.slice(-50) };
@@ -56,7 +56,7 @@ export const useATCStore = create<ATCStore>()((...a) => {
   } as any;
 });
 
-// EventBus 구독을 통한 슬라이스 디커플링 처리
+// Slice decoupling via EventBus
 atcEventBus.on('SYSTEM_ACTION', ({ action, pVal }) => {
   const store = useATCStore.getState();
   if (action === 'SCALE') store.setTrafficIntensityLocal(Number(pVal));
@@ -117,7 +117,7 @@ atcEventBus.on('AGENT_ACTION', ({ action, actualUuid, pVal, agents }) => {
   }
 });
 
-// Window global expose for E2E testing
+// Expose store to window for E2E testing
 if (typeof window !== 'undefined' && (import.meta.env.MODE !== 'production' || import.meta.env.VITE_USE_MSW === 'true')) {
   (window as unknown as { useATCStore: unknown }).useATCStore = useATCStore;
 }

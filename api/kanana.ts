@@ -60,7 +60,7 @@ export default async function handler(req: Request, executionCtx?: any) {
     const { messages, stream, async: isAsyncJob, extra_body, modalities } = body;
     const useAudio = extra_body?.audio?.voice ? true : false;
     
-    // 메시지 전처리 (프롬프트 인젝션 방어, 병합, PII 마스킹)
+    // Preprocess messages (Injection defense, PII masking)
     const processedResult = processKananaMessages(messages, context.rateLimitIdentifier);
     if (processedResult.error) {
       return new Response(JSON.stringify({ 
@@ -79,7 +79,7 @@ export default async function handler(req: Request, executionCtx?: any) {
     }
     const finalUrl = baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl}/chat/completions`;
 
-    // 추가 파라미터 검증 (보안: 필요한 필드만 화이트리스트 방식으로 허용)
+    // Whitelist extra parameters
     const upstashUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
     const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
     const hasRedis = !!(upstashUrl && upstashToken);
@@ -179,8 +179,7 @@ export default async function handler(req: Request, executionCtx?: any) {
       if (context.waitUntil) {
         context.waitUntil(runJob());
       } else {
-        // Node.js 등 로컬 환경에서는 waitUntil이 없으므로 비동기로 실행되도록 분리합니다.
-        // await을 사용하면 202 응답의 의미(즉각 반환)가 퇴색되고 클라이언트 지연을 유발합니다.
+        // 로컬 환경 202 Fallback (블로킹 방지)
         Promise.resolve().then(() => runJob().catch(err => logger.error("[KANANA_ASYNC_ERR_FALLBACK]", err)));
       }
 

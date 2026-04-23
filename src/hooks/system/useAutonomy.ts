@@ -64,25 +64,14 @@ export const useAutonomy = (state: ATCState, agents: Agent[], addLog: any) => {
     }
   }, [riskScore, RISK.HISTORY_LIMIT]);
 
-  // Optional: Update risk level visual indicator (Handled via App.tsx wrapper now)
-  // useEffect(() => {
-  //   if (riskScore > RISK.EMERGENCY_LEVEL) {
-  //     document.body.classList.add('emergency-pulse');
-  //   } else {
-  //     document.body.classList.remove('emergency-pulse');
-  //   }
-  // }, [riskScore, RISK.EMERGENCY_LEVEL]);
-
-  // Gemini 에이전트의 모드 스위칭을 위해 시뮬레이터에 riskScore 전달
+  // Sync riskScore with global store (MSW mode)
   useEffect(() => {
     if (import.meta.env.VITE_USE_MSW === 'true') {
-      // 전역 객체(window.msw)를 통해 MSW 워커 확인
       const msw = (window as any).msw;
       if (msw && msw.worker) {
         const newRiskLevel = Math.round(riskScore / 10);
         const currentRiskLevel = (useATCStore.getState().state as any)?.risk_level;
         
-        // NOTE: Prevents infinite render loop & complies with immutability
         if (currentRiskLevel !== newRiskLevel) {
           useATCStore.setState((s: any) => ({
             state: { ...s.state, risk_level: newRiskLevel }

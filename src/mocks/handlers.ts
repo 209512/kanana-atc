@@ -9,13 +9,13 @@ const { SIMULATOR, LOG_MSG } = ATC_CONFIG;
 let isInitialized = false;
 
 /**
- * AI가 보낸 ID가 DisplayName(예: Agent-1)일 경우 실제 UUID로 변환해주는 유틸리티
+ * Resolves ID to actual UUID if DisplayName is provided
  */
 const resolveUuid = (idOrName: string): string => {
-  // 1. 이미 유효한 UUID인 경우 그대로 반환
+  // 1. Return if already valid UUID
   if (simulator.agents.has(idOrName)) return idOrName;
   
-  // 2. DisplayName으로 찾기 (대소문자 구분 없이)
+  // 2. Find by DisplayName (case-insensitive)
   const found = Array.from(simulator.agents.values()).find(
     (a) => a.displayName.toLowerCase() === idOrName.toLowerCase() || a.id === idOrName
   );
@@ -41,7 +41,7 @@ export const handlers = [
   http.all('*/api/openai', () => passthrough()),
   http.all('*/api/anthropic', () => passthrough()),
 
-  // 스트림 핸들러
+  // Stream Handler
   http.get('*/api/stream', () => {
     isInitialized = true;
     const encoder = new TextEncoder();
@@ -119,7 +119,7 @@ export const handlers = [
     }), { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
   }),
 
-  // AI 일괄 액션 처리 핸들러 (resolveUuid 적용)
+  // Bulk Action Handler (w/ resolveUuid)
   http.post('*/api/actions/bulk', async ({ request }) => {
     const { actions } = await request.json() as { actions: any[] };
     
@@ -131,7 +131,7 @@ export const handlers = [
       const { action: type, targetId: rawTargetId, value } = action;
       if (!rawTargetId && !['STOP', 'START', 'OVERRIDE', 'RELEASE'].includes(type)) return;
 
-      // 입력받은 ID를 실제 UUID로 변환
+      // Convert provided ID to actual UUID
       const targetId = resolveUuid(rawTargetId);
 
       switch(type) {
@@ -187,7 +187,7 @@ export const handlers = [
     return HttpResponse.json({ success: true });
   }),
   
-  // 에이전트 스케일링
+  // Agent Scale
   http.post('*/api/agents/scale', async ({ request }) => {
     const { count } = await request.json() as any;
     simulator.updateState({ trafficIntensity: count });
@@ -225,7 +225,7 @@ export const handlers = [
     return HttpResponse.json({ success: true, count });
   }),
 
-  // 일시정지 제어
+  // Pause Control
   http.post('*/api/agents/:uuid/pause', async ({ request, params }) => {
     const { pause } = await request.json() as any;
     const { uuid } = params;
@@ -240,7 +240,7 @@ export const handlers = [
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
 
-  // 우선순위 제어
+  // Priority Control
   http.post('*/api/agents/:uuid/priority', async ({ request, params }) => {
     const { enable } = await request.json() as any;
     const { uuid } = params;
@@ -260,7 +260,7 @@ export const handlers = [
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
 
-  // 이름 변경
+  // Agent Rename
   http.post('*/api/agents/:uuid/rename', async ({ params, request }) => {
     const { uuid } = params;
     const { newName } = await request.json() as any;
@@ -273,7 +273,7 @@ export const handlers = [
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
 
-  // 에이전트 설정 (GET)
+  // Get Agent Config
   http.get('*/api/agents/:uuid/config', ({ params }) => {
     const { uuid } = params;
     const agent = simulator.agents.get(uuid as string);
@@ -288,7 +288,7 @@ export const handlers = [
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
 
-  // 디버그 이벤트 주입을 위한 핸들러
+  // Inject Debug Event
   http.post('*/api/mock/inject-event', async ({ request }) => {
     try {
       const { targetId, eventType, severity } = await request.json() as any;
@@ -302,7 +302,7 @@ export const handlers = [
     }
   }),
 
-  // 글로벌 정지
+  // Global Stop
   http.post('*/api/stop', async ({ request }) => {
     const { enable } = await request.json() as any;
     simulator.state.globalStop = enable;
@@ -310,7 +310,7 @@ export const handlers = [
     return HttpResponse.json({ success: true });
   }),
 
-  // 비상 오버라이드
+  // Emergency Override
   http.post('*/api/override', () => { 
     simulator.state.overrideSignal = true; 
     simulator.state.holder = 'USER';
@@ -318,7 +318,7 @@ export const handlers = [
     return HttpResponse.json({ success: true }); 
   }),
 
-  // 오버라이드 해제
+  // Release Override
   http.post('*/api/release', () => { 
     simulator.state.overrideSignal = false; 
     simulator.state.holder = null;
@@ -326,7 +326,7 @@ export const handlers = [
     return HttpResponse.json({ success: true }); 
   }),
 
-  // 에이전트 제거
+  // Terminate Agent
   http.delete('*/api/agents/:uuid', ({ params }) => { 
     const { uuid } = params;
     const targetId = String(uuid);
@@ -349,7 +349,7 @@ export const handlers = [
     return HttpResponse.json({ success: true });
   }),
 
-  // 강제 할당
+  // Force Transfer Lock
   http.post('*/api/agents/:uuid/transfer-lock', ({ params }) => { 
     const { uuid } = params;
     const targetId = String(uuid);
@@ -362,7 +362,7 @@ export const handlers = [
     return HttpResponse.json({ success: true }); 
 }),
 
-  // 우선순위 순서 업데이트
+  // Update Priority Order
   http.post('*/api/agents/priority-order', async ({ request }) => {
     const { order } = await request.json() as any;
     simulator.state.priorityAgents = order;
@@ -371,7 +371,7 @@ export const handlers = [
     return HttpResponse.json({ success: true });
   }),
 
-  // 에이전트 설정 업데이트 (POST)
+  // Update Agent Config (POST)
   http.post('*/api/agents/:uuid/config', async ({ params, request }) => {
     const body = await request.json() as any;
     const { uuid } = params;

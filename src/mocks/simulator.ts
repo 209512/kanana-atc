@@ -111,7 +111,7 @@ class ATCSimulator {
       timestamp: Date.now(),
       type
     };
-    // 500개까지만 유지하여 메모리 누수 방지 (자동 스크롤 해제 시 밀림 현상 최소화)
+    // GC: 로그 500개 유지 (메모리 블로트 방지)
     this.state.logs = [...this.state.logs.slice(-499), logEntry];
   }
 
@@ -122,7 +122,7 @@ class ATCSimulator {
   update() {
     const now = Date.now();
 
-    // 1. 글로벌 정지/오버라이드 시 즉시 반환
+    // Global stop / Override
     if (this.state.globalStop || this.state.overrideSignal) {
       if (this.state.globalStop) {
         this.state.holder = null;
@@ -131,7 +131,7 @@ class ATCSimulator {
       return;
     }
 
-    // 2. ★ 고스트 에이전트 체크
+    // Ghost Agent validation
     if (this.state.holder && !this.agents.has(this.state.holder)) this.state.holder = null;
     if (this.state.forcedCandidate && !this.agents.has(this.state.forcedCandidate)) this.state.forcedCandidate = null;
 
@@ -139,7 +139,7 @@ class ATCSimulator {
     const aliveAgents = allAgents.filter(a => !a.isPaused);
     const aliveUids = aliveAgents.map(a => a.uuid);
 
-    // 3. 강제 할당 (Transfer-Lock)
+    // Transfer-Lock assignment
     if (this.state.forcedCandidate) {
       if (now >= this.lockExpiry) {
         const targetId = this.state.forcedCandidate;
@@ -154,15 +154,13 @@ class ATCSimulator {
       return;
     }
 
-    // 4. PLC, 경쟁 로그 및 부하(Load) 변동 시뮬레이션
+    // Load variation & contention logic
     aliveAgents.forEach((agent) => {
-      // 4-1. 부하(Load) 변동 시뮬레이션
+      // Base Load fluctuation
       if (agent.status !== 'error') {
-        // 기본 부하를 ±5% 범위에서 변동
         let newBaseLoad = (agent.baseLoad || 30) + (Math.random() * 10 - 5);
-        newBaseLoad = Math.max(10, Math.min(100, newBaseLoad)); // 10~100 사이 유지
+        newBaseLoad = Math.max(10, Math.min(100, newBaseLoad));
         
-        // 1% 확률로 ERROR 상태 및 부하 99% 폭등
         if (Math.random() < 0.01) {
           this.agents.set(agent.uuid, { ...agent, status: 'error', baseLoad: 99 });
           this.addLog(agent.uuid, `CRITICAL HARDWARE FAILURE DETECTED`, 'critical');
@@ -181,8 +179,7 @@ class ATCSimulator {
           if (!endpoint) return;
         const lastCall = this.lastGeminiCalls.get(agent.uuid) || 0;
         
-        // 무조건 20초마다 찌르던 방식(Polling) 제거
-        // 20초가 지났을 때 무조건 lastCall을 갱신하고, 그 안에서 10%의 확률(센서가 위기를 감지한 상황)로만 서버를 찌름(Event Push)
+        // Event Push: Trigger AI assessment randomly (10% chance) after a 20s cooldown
         if (now - lastCall > 20000) {
           this.lastGeminiCalls.set(agent.uuid, now);
           
@@ -191,18 +188,17 @@ class ATCSimulator {
             const currentRiskLevel = (uiState.state as any).risk_level || 0;
             
             const externalData: Record<string, string> = {
-              location: import.meta.env.VITE_ATC_REGION || "Seoul", // 동적 지역 설정
+              location: import.meta.env.VITE_ATC_REGION || "Seoul",
               weather: Math.random() > 0.5 ? "Heavy Rain & Strong Winds" : "Dry & Clear",
               news: Math.random() > 0.5 ? "Urban Fire Detected" : "Marine SOS Signal Detected",
-              risk_level: String(currentRiskLevel), // 모드 스위칭을 위한 위험도 전달
+              risk_level: String(currentRiskLevel),
             };
 
-            // 이미지 데이터 전달 (스토어 연동) 및 1회성 섭취 (Garbage Collection)
+            // IDB Image Consume & GC
             let base64Image = undefined;
             const transientImg = getTransientImage();
             if (transientImg) {
                base64Image = transientImg;
-               // 1회 전송 후 불필요한 네트워크 대역폭 낭비와 메모리 블로트를 막기 위해 즉시 비움 (Consume)
                setTransientImage(null);
             }
 
@@ -222,22 +218,20 @@ class ATCSimulator {
               .then(res => res.json())
               .then(data => {
                 if (data.log) {
+                  // Parse JSON safely
                   let parsedData: any = {};
                   try {
                     parsedData = JSON.parse(data.log);
                   } catch(e) {
-                    // 만약 순수 JSON이 아니라 텍스트가 섞여 있다면 JSON 부분만 추출 시도
                     const jsonMatch = data.log.match(/\{[\s\S]*\}/);
                     if (jsonMatch) {
                       try {
                         parsedData = JSON.parse(jsonMatch[0]);
-                      } catch(innerE) {
-                        // ignore
-                      }
+                      } catch(innerE) {}
                     }
                   }
 
-                  // JSON 내부에 정의된 위험도를 스토어에 전달하거나, 상태를 업데이트
+                  // Determine Severity
                   let severity = 'info';
                   if (parsedData.risk_level && parsedData.risk_level >= 8) severity = 'critical';
                   else if (parsedData.risk_level && parsedData.risk_level >= 5) severity = 'warn';
@@ -246,10 +240,10 @@ class ATCSimulator {
                   
                   this.addLog(agent.uuid, `[Gemini Intelligence] ${msg}`, severity);
 
-                  // Gemini 스스로 위협 수준이 매우 높다고 판단하면 자율 행동(PAUSE) 시뮬레이션
+                  // Auto-Protocol: Force PAUSE if critical risk
                   if (parsedData.risk_level >= 9 || data.log.includes('"risk_level": 9') || data.log.includes('"risk_level": 10') || data.log.includes('"risk_level":9') || data.log.includes('"risk_level":10') || data.log.includes('[RISK_LEVEL:9]') || data.log.includes('[RISK_LEVEL:10]')) {
                     this.updateAgent(agent.uuid, { isPaused: true });
-                    this.addLog(agent.uuid, `[Gemini Auto-Protocol] 자율 일시정지(PAUSE) 실행됨.`, 'exec');
+                    this.addLog(agent.uuid, `[Gemini Auto-Protocol] Auto-PAUSE executed.`, 'exec');
                   }
                   
                   if (parsedData.condition) {
@@ -259,7 +253,7 @@ class ATCSimulator {
                         condition: parsedData.condition,
                         temp: parsedData.temp,
                         humidity: parsedData.humidity,
-                        isTactical: isTactical // UI 시각화를 위한 플래그 추가
+                        isTactical: isTactical
                       };
                       if (parsedData.condition !== "NORMAL") {
                         this.updateAgent(agent.uuid, { baseLoad: Math.min(100, (agent.baseLoad || 30) + 30) });
@@ -291,7 +285,8 @@ class ATCSimulator {
               this.addLog(agent.uuid, LOG_MSG.WAIT_FOR(holderAgent.displayName), 'warn');
             }
           }
-          // 과도한 삼각함수 연산 최적화: 단순 랜덤으로 부하 수치 결정
+          
+          // Generate random waiting load
           const randomLoad = Math.floor(Math.random() * 100);
           this.updateAgent(agent.uuid, {
             status: 'waiting',
@@ -301,7 +296,7 @@ class ATCSimulator {
       }
     });
 
-    // 5. 일반 할당
+    // Normal Assignment
     if (!this.state.holder || now > this.lockExpiry) {
       if (aliveUids.length > 0) {
         const priorityPool = this.state.priorityAgents.filter(id => aliveUids.includes(id));
