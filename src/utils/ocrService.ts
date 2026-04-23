@@ -4,26 +4,32 @@ import { logger } from './logger';
 
 class OcrService {
   private worker: Worker | null = null;
-  private isInitializing = false;
+  private initPromise: Promise<void> | null = null;
+  private isScanning = false;
 
   /**
    * Initialize Tesseract Worker in the background to download language data
    * and be ready for immediate use.
    */
-  async init() {
-    if (this.worker || this.isInitializing) return;
+  async init(): Promise<void> {
+    if (this.worker) return;
     
-    try {
-      this.isInitializing = true;
-      logger.log('[OCR_SERVICE] Pre-fetching Tesseract Worker and Language Models...');
-      this.worker = await createWorker('kor+eng');
-      logger.log('[OCR_SERVICE] Tesseract Worker ready.');
-    } catch (error) {
-      logger.error('[OCR_INIT_ERROR] Failed to pre-fetch Tesseract:', error);
-      this.worker = null;
-    } finally {
-      this.isInitializing = false;
+    if (this.initPromise) {
+      return this.initPromise;
     }
+
+    this.initPromise = (async () => {
+      try {
+        logger.log('[OCR_SERVICE] Pre-fetching Tesseract Worker and Language Models...');
+        this.worker = await createWorker('kor+eng');
+        logger.log('[OCR_SERVICE] Tesseract Worker ready.');
+      } catch (error) {
+        logger.error('[OCR_INIT_ERROR] Failed to pre-fetch Tesseract:', error);
+        this.worker = null;
+      }
+    })();
+
+    return this.initPromise;
   }
 
   /**
@@ -33,24 +39,26 @@ class OcrService {
    */
   async scanForPii(imageUrl: string): Promise<boolean> {
     try {
-      // Wait for initialization to complete if it's currently in progress
-      while (this.isInitializing) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      // Ensure worker exists
+      // 1. Wait for initialization if not ready (Promise-based lock)
       if (!this.worker) {
-        logger.warn('[OCR_SERVICE] Worker not initialized. Initializing now...');
         await this.init();
       }
-      
-      // If initialization failed completely, fallback
+
       if (!this.worker) {
         logger.error('[OCR_SERVICE] Cannot scan: Worker initialization failed.');
         return false; 
       }
-      
+
+      // 2. Concurrency Control (Single Tesseract worker instance cannot handle parallel recognize calls safely)
+      while (this.isScanning) {
+        // Polling lock for parallel scan requests
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      this.isScanning = true;
       const { data: { text } } = await this.worker.recognize(imageUrl);
+      this.isScanning = false;
+
       logger.debug('[OCR Scan Result]:', text);
 
       const hasPii = this.detectPii(text);
@@ -60,6 +68,7 @@ class OcrService {
       
       return hasPii;
     } catch (error) {
+      this.isScanning = false;
       logger.error('[OCR_SCAN_ERROR]', error);
       // In case of error, we default to allowing the upload so we don't break the UX completely,
       // but log it for monitoring.

@@ -59,20 +59,21 @@ export const mergeAgentsWorker = (
     
     if (existingAgent) {
       const isPosSame = existingAgent.index === agent.index;
+      
+      const parseMetric = (val: unknown) => parseFloat(String(val || '0').replace(/[^0-9.]/g, ''));
+      
       const isStatusSame = existingAgent.status === String(agent.status || 'idle').toLowerCase() &&
                            existingAgent.isPaused === !!finalIsPaused &&
                            existingAgent.priority === !!finalPriority &&
                            existingAgent.displayName === finalDisplayName &&
-                           Number((existingAgent.metrics as unknown as Record<string, number>)?.load) === Number((agent.metrics as unknown as Record<string, number>)?.load) &&
-                           Number((existingAgent.metrics as unknown as Record<string, number>)?.lat) === Number((agent.metrics as unknown as Record<string, number>)?.lat) &&
-                           Number((existingAgent.metrics as unknown as Record<string, number>)?.tot) === Number((agent.metrics as unknown as Record<string, number>)?.tot);
+                           parseMetric((existingAgent.metrics as any)?.load) === parseMetric((agent.metrics as any)?.load) &&
+                           parseMetric((existingAgent.metrics as any)?.lat) === parseMetric((agent.metrics as any)?.lat) &&
+                           parseMetric((existingAgent.metrics as any)?.tot) === parseMetric((agent.metrics as any)?.tot);
                            
       if (isPosSame && isStatusSame) {
-        // activeTime(가동 시간) 차이가 1000ms 미만인 경우 동일 객체로 취급하여 불필요한 메모리 할당(Allocate)과 리렌더링 방지
-        const diff = Math.abs((Number(existingAgent.activeTime) || 0) - (Number(agent.activeTime) || 0));
-        if (diff < 1000) {
-          return existingAgent; 
-        }
+        // 주요 상태와 위치가 동일하다면, activeTime의 미세한 지연(Latency) 차이로 인한 
+        // 불필요한 메모리 할당(Allocate)과 리렌더링 폭주를 막기 위해 기존 객체 참조를 유지 (Referential Equality)
+        return existingAgent; 
       }
     }
 
@@ -118,9 +119,10 @@ export const mergeStateWorker = (
     if (log && log.id) uniqueMap.set(log.id, log); 
     });
 
+  // Merge logs and maintain up to 1000 items (matching ATC_CONFIG.LOGS.MAX_DISPLAY)
   const sortedLogs = Array.from(uniqueMap.values())
     .sort((a: LogEntry, b: LogEntry) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0))
-    .slice(-200);
+    .slice(-1000);
 
   const { 
       pendingProposals: serverProposals, 
@@ -135,7 +137,7 @@ export const mergeStateWorker = (
             ? serverProposals.map((p: unknown) => { const prop = p as AIProposal; return [prop.id, prop]; }) 
             : serverProposals instanceof Map 
               ? Array.from(serverProposals.entries()) 
-              : []
+              : Object.entries(serverProposals || {})
         );
 
   const finalState = { 
