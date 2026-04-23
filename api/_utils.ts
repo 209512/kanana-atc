@@ -13,7 +13,7 @@ export const getAllowedOrigins = () => {
   ].filter(Boolean) as string[];
 
   if (process.env.NODE_ENV !== 'production') {
-    origins.push("http://localhost:5174", "http://127.0.0.1:5174", "http://localhost:3000");
+    origins.push("http://localhost:5174", "http://127.0.0.1:5174", "http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5173");
   }
   return origins;
 };
@@ -78,22 +78,32 @@ export async function banIp(ip: string, durationMinutes: number = 60) {
 const MAX_REQUESTS = 20; // 분당 최대 20회 요청 허용
 const MAX_VIOLATIONS = 5; // 제한 초과 5회 누적 시 IP 차단
 
-// 메모리 내 Rate Limit 캐시 (Upstash 장애 시 1차 방어용 및 DDoS 방어용)
-export const localRateLimitCache = new Map<string, { count: number, expiry: number }>();
+// In-Memory Cache for Single Isolate Burst Protection
+// 주의: Vercel Edge 환경에서는 이 캐시가 전역으로 공유되지 않으며(Isolate 단위로 초기화됨), 
+// Redis 장애 시 최소한의 무차별 대입(DDoS)을 막기 위한 1차 방어선(Burst Limiter) 역할만 수행합니다.
+const isolateBurstCache = new Map<string, { count: number; resetTime: number }>();
 
 export async function checkRateLimit(identifier: string, maxRequests: number = MAX_REQUESTS, ip?: string): Promise<boolean> {
+  if (identifier === 'unknown_ip') return false;
   const localKey = `rl:${identifier}`;
   const now = Date.now();
-  const cached = localRateLimitCache.get(localKey);
-  
-  let currentCount = 1;
-  if (cached && cached.expiry > now) {
-    currentCount = cached.count + 1;
-  }
-  localRateLimitCache.set(localKey, { count: currentCount, expiry: now + 60000 }); // 1분 유지
+  const windowMs = 60 * 1000;
 
-  // 로컬 메모리에서 먼저 차단 (DDoS 보호 및 Redis API 호출 비용 절감)
-  if (currentCount > maxRequests) return false;
+  // 1차 방어선: Isolate Burst Cache (Redis를 타기 전 극단적인 폭주 방지)
+  const burstRecord = isolateBurstCache.get(localKey);
+  if (burstRecord) {
+    if (now > burstRecord.resetTime) {
+      isolateBurstCache.set(localKey, { count: 1, resetTime: now + windowMs });
+    } else {
+      burstRecord.count++;
+      if (burstRecord.count > maxRequests) {
+        logger.warn(`[RATE_LIMIT] Blocked by Isolate Burst Cache: ${identifier}`);
+        return false;
+      }
+    }
+  } else {
+    isolateBurstCache.set(localKey, { count: 1, resetTime: now + windowMs });
+  }
 
   const upstashUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
   const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
@@ -129,22 +139,32 @@ export async function checkRateLimit(identifier: string, maxRequests: number = M
 }
 
 export function getClientIp(req: Request): string {
+  // 1. Vercel 환경: x-vercel-forwarded-for는 조작 불가능한 신뢰할 수 있는 헤더입니다.
   const vercelIp = req.headers.get("x-vercel-forwarded-for");
-  if (vercelIp) return vercelIp.split(',')[0].trim();
+  if (vercelIp) {
+    const ip = vercelIp.split(',')[0].trim();
+    if (isValidIp(ip)) return ip;
+  }
 
-  // Vercel 환경이 아닐 경우(로컬 등) 위변조 가능한 헤더보다 안정적인 값을 우선하거나,
-  // 최소한 x-forwarded-for를 사용하되 가장 우측(프록시) 혹은 신뢰할 수 있는 IP를 가져와야 함.
-  // 간단히 x-forwarded-for의 맨 왼쪽 IP를 가져오되, Vercel 환경 외에서는 조작될 수 있음을 주의.
+  // 2. 비 Vercel 환경 (로컬, 커스텀 프록시): x-forwarded-for 파싱
   const forwarded = req.headers.get("x-forwarded-for");
   if (forwarded) {
-    const parts = forwarded.split(',');
-    return parts[0].trim();
+    // 보안: IP 스푸핑을 방지하기 위해 클라이언트가 제공한 첫 번째 IP가 아닌, 
+    // 가장 신뢰할 수 있는 (가장 마지막으로 거쳐온) 프록시 IP를 사용합니다.
+    const ips = forwarded.split(',').map(ip => ip.trim());
+    const ip = ips[ips.length - 1];
+    if (isValidIp(ip)) return ip;
   }
 
   const realIp = req.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
+  if (realIp && isValidIp(realIp.trim())) return realIp.trim();
 
   return "unknown_ip";
+}
+
+function isValidIp(ip: string): boolean {
+  // 간단한 IPv4/IPv6 유효성 검사로 악의적인 NoSQL Injection이나 Key 변조 방지
+  return /^([a-fA-F0-9:.]+)$/.test(ip);
 }
 
 // --- Token Revocation (Blacklist) Logic ---
@@ -169,14 +189,14 @@ export async function handleDailyQuota(identifier: string): Promise<boolean> {
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   const dailyQuotaKey = `daily_quota:${identifier}:${today}`;
   
-  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
   if (!upstashUrl) return false;
 
   try {
     const quotaRes = await fetch(`${upstashUrl}/pipeline`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}`,
+        'Authorization': `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify([
@@ -227,19 +247,18 @@ export async function verifyAuthToken(req: Request): Promise<{ valid: boolean; p
 
   try {
     const secret = new TextEncoder().encode(secretKey);
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'] });
     
     const typedPayload = payload as { jti?: string, boundIp?: string, [key: string]: unknown };
     
     // IP 검증 (boundIp와 현재 IP 비교)
     // 모바일 기기 네트워크 전환 등 정상적인 환경 변화에서 로그아웃되는 문제를 방지하기 위해,
     // 엄격한 일치 검사 대신 경고 로깅만 남기고 토큰 자체의 유효성(서명 및 만료 시간) 신뢰.
-    // 하지만 보안을 강화하려면 IP 바인딩을 강제하는 것이 좋습니다.
     const isVercel = !!process.env.VERCEL;
     const currentIp = getClientIp(req);
     if (isVercel && typedPayload.boundIp && typedPayload.boundIp !== 'unknown' && currentIp !== 'unknown' && typedPayload.boundIp !== currentIp) {
-      logger.warn(`[AUTH_ERROR] Token IP mismatch. Token bound to ${typedPayload.boundIp}, but used by ${currentIp}`);
-      return { valid: false }; // 엄격한 IP 바인딩(세션 하이재킹 방지)
+      logger.warn(`[AUTH_WARN] Token IP mismatch. Token bound to ${typedPayload.boundIp}, but used by ${currentIp}`);
+      // return { valid: false }; 대신 경고만 남기고 통과시킵니다.
     }
 
     // 탈취된 토큰(JTI) 차단 검사
