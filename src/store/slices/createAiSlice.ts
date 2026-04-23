@@ -6,6 +6,8 @@ import { ATC_CONFIG } from '@/constants/atcConfig';
 import { AIProposal } from '@/contexts/atcTypes';
 import { logger } from '@/utils/logger';
 
+import { atcEventBus } from '@/utils/eventBus';
+
 export const createAiSlice: StateCreator<
   ATCStore,
   [],
@@ -75,80 +77,18 @@ export const createAiSlice: StateCreator<
         }
 
         if (['SYSTEM', 'GLOBAL'].includes(targetKey)) {
-          await store._executeSystemAction(action, pVal as string | null);
+          atcEventBus.emit('SYSTEM_ACTION', { action, pVal: pVal as string | null });
           continue;
         }
 
         if (!actualUuid) continue;
-        await store._executeAgentAction(action, actualUuid, pVal as string | null);
+        atcEventBus.emit('AGENT_ACTION', { action, actualUuid, pVal: pVal as string | null, agents: store.agents });
       }
       store.playSuccess();
       set((s) => ({ state: { ...s.state, pendingProposals: new Map() } }));
     } catch (err) {
       logger.error("AI Action Execution Failed:", err);
       store.addLog("❌ EXECUTION_FAILED: Please retry.", "critical", "SYSTEM");
-    }
-  },
-
-  _executeSystemAction: async (action: string, pVal: string | null) => {
-    const store = get();
-    if (action === 'SCALE') store.setTrafficIntensityLocal(Number(pVal));
-    if (action === 'STOP' || action === 'START') {
-      const isStop = action === 'STOP';
-      store.markAction('', 'globalStop', isStop);
-    }
-    if (action === 'OVERRIDE') {
-      store.markAction('', 'overrideSignal', true);
-      store.markAction('', 'holder', 'USER');
-    }
-    if (action === 'RELEASE') {
-      store.markAction('', 'overrideSignal', false);
-      store.markAction('', 'holder', null);
-    }
-  },
-
-  _executeAgentAction: async (action: string, actualUuid: string, pVal: string | null) => {
-    const store = get();
-    const agent = store.agents.find(a => a.uuid === actualUuid);
-    
-    switch (action) {
-      case 'PAUSE': 
-        if (agent && !agent.isPaused) store.markAction(actualUuid, 'isPaused', true); 
-        break;
-      case 'RESUME': 
-        if (agent && agent.isPaused) store.markAction(actualUuid, 'isPaused', false); 
-        break;
-      case 'PRIORITY': 
-        if (agent && !agent.priority) store.markAction(actualUuid, 'priority', true); 
-        break;
-      case 'REVOKE': 
-        if (agent && agent.priority) store.markAction(actualUuid, 'priority', false); 
-        break;
-      case 'RENAME': 
-        if (pVal) store.markAction(actualUuid, 'displayName', String(pVal)); 
-        break;
-      case 'CONFIG':
-        if (pVal) {
-          try {
-            const configUpdates = JSON.parse(pVal);
-            store.updateAgentConfigLocal(actualUuid, configUpdates);
-          } catch {
-            logger.error("Invalid CONFIG JSON in proposal:", pVal);
-          }
-        }
-        break;
-      case 'TERMINATE': {
-        const agents = store.agents;
-        if (agents.length > 1) {
-          store.markAction(actualUuid, '', null, true);
-          store.setTrafficIntensityLocal(Math.max(0, agents.length - 1));
-        }
-        break;
-      }
-      case 'TRANSFER': 
-        store.markAction('', 'forcedCandidate', actualUuid);
-        // store.markAction('', 'holder', null); // 락 이양 시 holder 초기화로 인한 전체 일시정지 버그 방지
-        break;
     }
   },
 

@@ -1,6 +1,7 @@
 import { withApiMiddleware } from './_middleware';
 import { logger } from './_logger';
 import { z } from 'zod';
+import { AI_PROVIDERS } from './_aiProviders';
 
 export const config = {
   runtime: 'edge',
@@ -50,8 +51,8 @@ export default async function handler(req: Request) {
     }
 
     const apiKey = (customKey || process.env.OPENAI_API_KEY || "").trim();
-    const model = (process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
-    const endpoint = (process.env.OPENAI_ENDPOINT || "https://api.openai.com/v1/chat/completions").trim();
+    const model = (process.env.OPENAI_MODEL || AI_PROVIDERS.OPENAI.DEFAULT_MODEL).trim();
+    const endpoint = (process.env.OPENAI_ENDPOINT || AI_PROVIDERS.OPENAI.API_URL).trim();
 
     if (!apiKey) {
       const riskLevel = externalData?.risk_level ? Number(externalData.risk_level) : 5;

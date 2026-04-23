@@ -1,6 +1,7 @@
 import { withApiMiddleware } from './_middleware';
 import { logger } from './_logger';
 import { z } from 'zod';
+import { AI_PROVIDERS } from './_aiProviders';
 
 export const config = {
   runtime: 'edge',
@@ -50,8 +51,8 @@ export default async function handler(req: Request) {
     }
 
     const apiKey = (customKey || process.env.ANTHROPIC_API_KEY || "").trim();
-    const model = (process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20240620").trim();
-    const endpoint = (process.env.ANTHROPIC_ENDPOINT || "https://api.anthropic.com/v1/messages").trim();
+    const model = (process.env.ANTHROPIC_MODEL || AI_PROVIDERS.ANTHROPIC.DEFAULT_MODEL).trim();
+    const endpoint = (process.env.ANTHROPIC_ENDPOINT || AI_PROVIDERS.ANTHROPIC.API_URL).trim();
 
     if (!apiKey) {
       const riskLevel = externalData?.risk_level ? Number(externalData.risk_level) : 5;

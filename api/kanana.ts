@@ -4,6 +4,7 @@ import { logger } from './_logger';
 import { z } from 'zod';
 import { handleDailyQuota, redisFetch } from './_utils';
 import { processKananaMessages } from './_kananaUtils';
+import { AI_PROVIDERS } from './_aiProviders';
 
 export const config = {
   runtime: 'edge',
@@ -36,8 +37,8 @@ export default async function handler(req: Request, executionCtx?: any) {
     
     const clientKananaKey = req.headers.get('x-kanana-key');
     const apiKey = (clientKananaKey || process.env.KANANA_API_KEY || "").trim();
-    const apiEndpoint = (process.env.KANANA_ENDPOINT || "").trim();
-    const model = (process.env.KANANA_MODEL || "kanana-o").trim();
+    const apiEndpoint = (process.env.KANANA_ENDPOINT || AI_PROVIDERS.KANANA.API_URL).trim();
+    const model = (process.env.KANANA_MODEL || AI_PROVIDERS.KANANA.DEFAULT_MODEL).trim();
 
     if (!apiKey || !apiEndpoint) {
       return new Response(JSON.stringify({ 
@@ -76,17 +77,13 @@ export default async function handler(req: Request, executionCtx?: any) {
         ? baseUrl.replace("/chat/completions", "") 
         : `${baseUrl}/v1`;
     }
-    const finalUrl = `${baseUrl}/chat/completions`;
+    const finalUrl = baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl}/chat/completions`;
 
     // 추가 파라미터 검증 (보안: 필요한 필드만 화이트리스트 방식으로 허용)
-    // latency_first는 Kanana API 스펙에 맞춰 Root(최상단) 파라미터로 병합되도록 아래 requestBody에서 처리합니다.
-
-    // Kanana-O API 호출
     const upstashUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
     const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
     const hasRedis = !!(upstashUrl && upstashToken);
 
-    // FIXME: Dynamic parameter mapping required by API specification
     const requestBody: any = {
       model: model,
       messages: maskedMessages,
@@ -97,9 +94,10 @@ export default async function handler(req: Request, executionCtx?: any) {
         latency_first: extra_body?.latency_first !== undefined ? extra_body.latency_first : true
       }
     };
+    
     if (useAudio) {
       requestBody.audio = { 
-        voice: extra_body?.audio?.voice || "preset_spk_1"
+        voice: extra_body?.audio?.voice || "preset_spk_1" // Fallback to preset_spk_1 if not specified
       };
       if (extra_body?.audio?.format) {
         requestBody.audio.format = extra_body.audio.format;
@@ -181,9 +179,9 @@ export default async function handler(req: Request, executionCtx?: any) {
       if (context.waitUntil) {
         context.waitUntil(runJob());
       } else {
-        // Fallback if waitUntil is not available (e.g. dev mode without edge runtime simulation)
-        // 서버리스 컨테이너 파괴로 인한 비동기 작업(runJob) 강제 종료를 막기 위해 await 추가 (Silent Death 해결)
-        await runJob();
+        // Node.js 등 로컬 환경에서는 waitUntil이 없으므로 비동기로 실행되도록 분리합니다.
+        // await을 사용하면 202 응답의 의미(즉각 반환)가 퇴색되고 클라이언트 지연을 유발합니다.
+        Promise.resolve().then(() => runJob().catch(err => logger.error("[KANANA_ASYNC_ERR_FALLBACK]", err)));
       }
 
       return new Response(JSON.stringify({ job_id: jobId }), {
@@ -216,6 +214,7 @@ export default async function handler(req: Request, executionCtx?: any) {
       logger.error(`[KANANA_API_ERR] status: ${status}, raw: ${rawError}`);
 
       let errorKey = `HTTP_${status}`;
+      if (status === 400) errorKey = "BAD_REQUEST";
       if (status === 401) errorKey = "INVALID_API_KEY";
       if (status === 429) errorKey = "QUOTA_EXCEEDED";
       if (status === 500) errorKey = "SERVICE_TEMPORARILY_UNAVAILABLE"; // FAQ 에러 코드 반영
