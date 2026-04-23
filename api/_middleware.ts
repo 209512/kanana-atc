@@ -41,7 +41,7 @@ export async function withApiMiddleware(
   if (req.method === "OPTIONS") {
     const responseHeaders = new Headers({
       "Access-Control-Allow-Methods": `${options.allowedMethods.join(', ')}, OPTIONS`,
-      "Access-Control-Allow-Headers": "Content-Type, Authorization"
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-kanana-key, x-agent-keys"
     });
     if (isAllowed && origin) {
       responseHeaders.set("Access-Control-Allow-Origin", origin);
@@ -75,11 +75,8 @@ export async function withApiMiddleware(
   // 5. 인증 (JWT/Signed Token 검증)
   if (options.requireAuth) {
     if (!process.env.JWT_SECRET) {
-      logger.error("[AUTH_ERROR] JWT_SECRET is missing!");
-      return new Response(JSON.stringify({ 
-        error: "INTERNAL_SERVER_ERROR", 
-        message: "Server configuration error." 
-      }), { status: 500, headers: corsHeaders });
+      logger.error("[MIDDLEWARE_ERR] Server configuration error: JWT_SECRET missing");
+      return new Response(JSON.stringify({ error: "INTERNAL_SERVER_ERROR" }), { status: 500 });
     }
 
     const authResult = await verifyAuthToken(req);
