@@ -1,4 +1,3 @@
-// src/components/layout/Dashboard.tsx
 import React, { Suspense, lazy } from 'react';
 import { ControlTower } from '@/components/layout/ControlTower';
 import { ProposalBanner } from '@/components/command/ProposalBanner';
@@ -28,14 +27,14 @@ export const Dashboard = () => {
         isDark ? "bg-[#050505]" : "bg-slate-100",
         isVisualHapticActive && "shadow-[inset_0_0_150px_rgba(239,68,68,0.4)] border-4 border-red-500/50"
     )}>
-      {/* 1. 최하단 배경: 레이더 (Z-0) */}
+      {/* 1. Base Layer: Radar (Z-0) */}
       <div className="absolute inset-0 z-0">
         <Suspense fallback={<div className="w-full h-full bg-[#050505] animate-pulse"></div>}>
           <Radar isMainView={true} /> 
         </Suspense>
       </div>
 
-      {/* 2. 시스템 HUD (Z-10) */}
+      {/* 2. System HUD (Z-10) */}
       <div className="absolute top-4 left-6 z-10 pointer-events-none select-none opacity-30">
         <h1 className={clsx("text-4xl font-black tracking-tighter uppercase", isDark ? "text-white" : "text-slate-900")}>
           KANANA-ATC // <span className="text-red-500">TRAFFIC</span>
@@ -46,18 +45,18 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      {/* 3. 모니터링 창들 (Z-30): TerminalLog, TacticalPanel 등 */}
+      {/* 3. Monitoring Windows (Z-30): TerminalLog, TacticalPanel */}
       <ControlTower />
 
-      {/* 4. 인터랙티브 UI 레이어 (Z-40): 가이드 및 입력창 */}
+      {/* 4. Interactive UI Layer (Z-40): Guidelines and Command Center */}
       <div 
-        className="absolute inset-y-0 left-0 z-40 transition-all duration-300 pointer-events-none"
-        style={{ right: `${isSidebarCollapsed ? 64 : sidebarWidth}px` }}
+        className="absolute inset-y-0 left-0 z-40 transition-all duration-300 pointer-events-none md:right-[var(--sidebar-width)] right-0"
+        style={{ '--sidebar-width': `${isSidebarCollapsed ? 64 : sidebarWidth}px` } as React.CSSProperties}
       >
-        {/* 우측 상단 조작 가이드 */}
+        {/* Top Right Control Guide */}
         <div className="absolute top-4 right-4 flex flex-col gap-2 transition-all duration-300">
             <div className={clsx(
-                "flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md text-[9px] font-mono font-bold transition-all pointer-events-auto", 
+                "flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md text-[9px] font-mono font-bold transition-all pointer-events-auto hidden md:flex", 
                 isDark ? "bg-black/40 border-white/10 text-white/60" : "bg-white/60 border-black/5 text-black/60"
             )}>
                 <div className="flex items-center gap-1.5 border-r border-current pr-2">
@@ -73,20 +72,35 @@ export const Dashboard = () => {
                     <span>{t('dashboard.rclick', 'R-CLICK: PAN')}</span>
                 </div>
             </div>
+            
+            {/* Mobile Touch Guide */}
+            <div className={clsx(
+                "flex md:hidden items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md text-[9px] font-mono font-bold transition-all pointer-events-auto", 
+                isDark ? "bg-black/40 border-white/10 text-white/60" : "bg-white/60 border-black/5 text-black/60"
+            )}>
+                <div className="flex items-center gap-1.5 border-r border-current pr-2">
+                    <MousePointer2 size={10} className="text-blue-500" />
+                    <span>TAP: SELECT</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <Move size={10} className="text-purple-500" />
+                    <span>DRAG: ROTATE</span>
+                </div>
+            </div>
         </div>
 
-        {/* 중앙 하단: 배너 및 커맨드센터 */}
-        <div className="absolute inset-x-0 bottom-8 flex flex-col items-center gap-4 transition-all duration-300 w-full max-w-2xl mx-auto px-4">
-           <div className="pointer-events-auto">
+        {/* Bottom Center: Command Center */}
+        <div className="absolute md:absolute inset-x-0 bottom-0 md:bottom-8 flex flex-col items-center gap-4 transition-all duration-300 w-full max-w-2xl mx-auto px-4 pb-[env(safe-area-inset-bottom,20px)] md:pb-0 z-50">
+           <div className="pointer-events-auto w-full mb-2 md:mb-8">
              <ProposalBanner />
            </div>
-           <div className="w-full flex justify-center pointer-events-auto">
+           <div className="w-full flex justify-center pointer-events-auto bg-gradient-to-t from-black/80 via-black/50 to-transparent md:bg-none pb-4 md:pb-0 pt-12 md:pt-0">
              <CommandCenter />
            </div>
         </div>
       </div>
 
-      {/* 5. 디버그 패널 (숨겨진 기능) */}
+      {/* 5. Debug Panel */}
       <DebugPanel />
     </main>
   );

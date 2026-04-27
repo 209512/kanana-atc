@@ -1,4 +1,3 @@
-// src/utils/logStyles.ts
 export type LogType = 'critical' | 'error' | 'warn' | 'success' | 'system' | 'info' | 'lock' | 'policy' | 'insight' | 'proposal' | 'exec';
 
 export const LOG_LEVELS: Record<LogType, { color: string; tag: string; label: string }> = {

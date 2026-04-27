@@ -1,4 +1,3 @@
-// src/hooks/agent/useTacticalActions.ts
 import { useState, useCallback } from 'react';
 import { useATCStore } from '@/store/useATCStore';
 import { useUIStore } from '@/store/useUIStore';

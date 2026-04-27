@@ -1,4 +1,3 @@
-// src/contexts/atcApi.ts
 import { parseStreamChunk } from '@/utils/streamParser';
 import { logger } from '../utils/logger';
 import { useATCStore } from '@/store/useATCStore';
@@ -12,34 +11,37 @@ export interface AIMessage {
 export interface AiPayload {
   text?: string;
   messages?: AIMessage[];
+  signal?: AbortSignal;
 }
 
-// 순수 API 요청 객체 (상태를 내부에 가지지 않음)
+
 export const atcApi = {
   askKanana: async (payload: AiPayload, onChunk?: (text: string, audioBase64: string | null) => void) => {
-    const currentQuota = useATCStore.getState().aiQuota;
-    // 쿼터 체크 시 로컬 상태(20)를 믿지 않고, 만약 0이라면 바로 차단
-    if (currentQuota <= 0) throw new Error("QUOTA_EXCEEDED");
-
     const finalMessages = payload.messages 
       ? payload.messages 
       : [{ role: "user" as const, content: payload.text || "" }];
 
-    // Vercel 무료 배포 환경을 고려하여 기본적으로 TTS(Web Speech API)로 폴백하도록 수정합니다.
-    // 만약 VITE_USE_KANANA_AUDIO가 명시적으로 'true'일 때만 오디오 파이프라인을 탑승시킵니다.
-    const useAudio = import.meta.env.VITE_USE_KANANA_AUDIO === 'true';
-    const isStream = true; // 진정한 비동기 큐 사용을 위해 스트리밍 비활성화 지시(단, 서버에 Redis가 없으면 다시 스트리밍됨)
+    // NOTE: Environment-aware Audio Fallback (PCM on local, Web API on Vercel)
+    const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const envAudio = import.meta.env?.VITE_USE_KANANA_AUDIO;
+    const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+    
+    // NOTE: Force TTS fallback on Vercel to prevent 50MB payload limits
+    const useAudio = !isVercel && (envAudio === 'true' || envAudio === true || (isLocal && envAudio !== 'false' && envAudio !== false));
+    
+    // NOTE: Fake Keep-Alive on Vercel (10s Edge Timeout Bypass)
+    const isStream = true;
     
     const extra_body = {
-      latency_first: true,
+      latency_first: true, 
       audio: useAudio ? { voice: "preset_spk_1" } : undefined
     };
 
     const requestBody: Record<string, unknown> = { 
-      model: "kanana-o", 
+      model: import.meta.env?.VITE_KANANA_MODEL || "kanana-o", 
       messages: finalMessages, 
       stream: isStream,
-      async: true, // Vercel 10초 룰 회피를 위한 비동기 큐 지시 플래그
+      async: true, 
       extra_body
     };
 
@@ -47,7 +49,7 @@ export const atcApi = {
       requestBody.modalities = ["text", "audio"];
     }
 
-    // 이미지가 메시지 배열에 포함되어 있다면 modalities에 "image" 추가
+    
     const hasImage = finalMessages.some(msg => 
       Array.isArray(msg.content) && msg.content.some(part => part.type === "image_url")
     );
@@ -57,51 +59,60 @@ export const atcApi = {
 
     const response = await request('/kanana', {
         method: 'POST', 
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
+        signal: payload.signal
       });
 
       if (!response) {
         throw new Error("Empty response from /kanana API");
       }
-
-    // Zustand 스토어의 쿼터를 1회 차감합니다.
-    useATCStore.getState().setAiQuota(currentQuota - 1);
+      
+      // NOTE: Handle Offline Queue Response Gracefully
+      if (response.queued) {
+        const msg = "[SYSTEM_OFFLINE] 네트워크 연결이 끊어졌습니다. 요청이 큐에 저장되어 연결 복구 시 자동 동기화됩니다.";
+        if (onChunk) onChunk(msg, null);
+        return { message: msg, audio: null };
+      }
     
     let resultPayload: any = null;
 
-    // request()는 stream: false이거나 202 응답(Async Queue)일 경우 JSON 파싱된 객체를 반환합니다.
-    // response가 Response 객체(스트림)가 아니고, job_id 속성을 가진 일반 객체인지 확인합니다.
+    // NOTE: Poll Async Queue (Redis) via Web Worker to prevent UI freezing/frame drops
     if (response && !(response instanceof Response) && response.job_id) {
-      // Async Queue 모드 처리 (job_id 폴링)
       const jobId = response.job_id;
-
-      // 폴링 로직 (최대 120초 대기)
-      const maxRetries = 60;
-      for (let i = 0; i < maxRetries; i++) {
-        await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기
+      
+      resultPayload = await new Promise((resolve, reject) => {
+        const worker = new Worker(new URL('../workers/pollWorker.ts', import.meta.url), { type: 'module' });
         
-        try {
-          const pollData = await request(`/kanana-poll?job_id=${jobId}`, { method: 'GET' });
-          
-          if (pollData.status === "completed") {
-            resultPayload = pollData.result;
-            break;
-          } else if (pollData.status === "failed") {
-            throw new Error(pollData.error || "ASYNC_JOB_FAILED");
+        worker.onmessage = (e) => {
+          if (e.data.type === 'SUCCESS') {
+            resolve(e.data.payload);
+          } else if (e.data.type === 'ERROR') {
+            reject(new Error(e.data.error || 'ASYNC_JOB_FAILED'));
           }
-        } catch (e: any) {
-          // 404나 기타 오류일 수 있으므로 무시하고 계속 폴링
-          logger.warn(`[POLL_WARN] ${e.message}`);
+          worker.terminate();
+        };
+
+        worker.onerror = (e) => {
+          reject(new Error('PollWorker failed: ' + e.message));
+          worker.terminate();
+        };
+
+        const baseUrl = import.meta.env?.VITE_API_BASE_URL || '/api';
+        let apiKey = import.meta.env?.VITE_KANANA_API_KEY || "";
+        if (!apiKey && typeof window !== 'undefined' && window.sessionStorage) {
+            apiKey = window.sessionStorage.getItem('KANANA_API_KEY') || "";
         }
-      }
+        
+        worker.postMessage({ jobId, baseUrl, apiKey });
+      });
 
       if (!resultPayload) {
         throw new Error("ASYNC_JOB_TIMEOUT");
       }
     } else {
-      // 동기 모드 처리 (폴백 - Redis가 없어 Async 모드가 무시된 경우)
+      // NOTE: Fallback for synchronous or direct stream mode
       if (response instanceof Response && response.body) {
-        // 스트리밍 모드 폴백
+        // NOTE: Stream reading
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let done = false;
@@ -132,17 +143,17 @@ export const atcApi = {
     }
 
     if (onChunk && resultPayload.message) {
-      // 전체 메시지를 타이핑 효과처럼 잘라서 onChunk 호출 (스트리밍 시뮬레이션)
+      
       const message = resultPayload.message;
-      const chunkSize = Math.max(1, Math.floor(message.length / 20)); // 약 20번의 청크로 분할
+      const chunkSize = Math.max(1, Math.floor(message.length / 20)); 
       let currentIndex = 0;
 
       while (currentIndex < message.length) {
         const nextIndex = Math.min(currentIndex + chunkSize, message.length);
         const chunk = message.slice(currentIndex, nextIndex);
-        onChunk(chunk, currentIndex === 0 ? resultPayload.audio : null); // 첫 청크에만 오디오 첨부
+        onChunk(chunk, currentIndex === 0 ? resultPayload.audio : null); 
         currentIndex = nextIndex;
-        await new Promise(resolve => setTimeout(resolve, 50)); // 50ms 대기
+        await new Promise(resolve => setTimeout(resolve, 50)); 
       }
     } else if (onChunk && resultPayload.audio) {
       onChunk("", resultPayload.audio);

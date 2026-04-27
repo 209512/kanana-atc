@@ -1,4 +1,3 @@
-// src/components/monitoring/radar/RadarBackground.tsx
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
 

@@ -1,4 +1,3 @@
-// src/hooks/agent/useCategorizedAgents.ts
 import { useMemo } from 'react';
 import { useATCStore } from '@/store/useATCStore';
 import { Agent } from '@/contexts/atcTypes';

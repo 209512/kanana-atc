@@ -1,0 +1,1 @@
+export function color(text: string): string;

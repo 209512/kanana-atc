@@ -1,4 +1,3 @@
-// src/components/monitoring/queue/QueueAgentRow.tsx
 import React, { memo } from 'react';
 import clsx from 'clsx';
 import { Activity, Star, Zap } from 'lucide-react';

@@ -3,6 +3,7 @@ import { Agent } from '../contexts/atcTypes';
 export type ATCEventMap = {
   'SYSTEM_ACTION': { action: string; pVal: string | null };
   'AGENT_ACTION': { action: string; actualUuid: string; pVal: string | null; agents: Agent[] };
+  'AUDIT_LOG_ADDED': any;
 };
 
 type EventCallback<K extends keyof ATCEventMap> = (detail: ATCEventMap[K]) => void;

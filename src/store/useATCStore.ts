@@ -1,4 +1,3 @@
-// src/store/useATCStore.ts
 import { create } from 'zustand';
 import { Agent, ATCState, AIProposal, LogEntry } from '@/contexts/atcTypes';
 import { createCoreSlice } from './slices/createCoreSlice';
@@ -17,32 +16,29 @@ export const useATCStore = create<ATCStore>()((...a) => {
     ...createCoreSlice(...a),
     ...createAiSlice(...a),
     ...createActionSlice(...a),
-    lastKnownGoodActions: [], // Fallback actions
-    setLastKnownGoodActions: (actions: any[]) => set({ lastKnownGoodActions: actions }),
     metrics: {
       totalAiCalls: 0,
       jailbreakAttempts: 0,
       jsonParseFailures: 0,
       successfulActions: 0,
     },
-    recordMetric: (type: 'call' | 'jailbreak' | 'parseFailure' | 'success') => set((s: any) => {
+    recordMetric: (type: 'call' | 'jailbreak' | 'parseFailure' | 'success') => set((s: ATCStore) => {
       const metrics = { ...(s.metrics || { totalAiCalls: 0, jailbreakAttempts: 0, jsonParseFailures: 0, successfulActions: 0 }) };
       if (type === 'call') metrics.totalAiCalls += 1;
       if (type === 'jailbreak') metrics.jailbreakAttempts += 1;
       if (type === 'parseFailure') metrics.jsonParseFailures += 1;
       if (type === 'success') metrics.successfulActions += 1;
-      return { metrics };
+      return { metrics } as Partial<ATCStore>;
     }),
     auditLogs: [], // Temporary UI state
     addAuditLog: (log: any) => {
-      // IDB async save
-      idbService.addAuditLog(log).catch(err => logger.error("IDB Add Error", err));
-      
-      // Keep last 50 logs for UI (GC)
-      set((s: any) => {
+      // NOTE: Keep last 50 logs for UI (GC)
+      set((s: ATCStore) => {
         const newLogs = [...(s.auditLogs || []), { ...log, timestamp: Date.now() }];
-        return { auditLogs: newLogs.slice(-50) };
+        return { auditLogs: newLogs.slice(-50) } as Partial<ATCStore>;
       });
+      // NOTE: Fire event to decouple IDB async save from UI state update
+      atcEventBus.emit('AUDIT_LOG_ADDED', log);
     },
     initAuditLogs: async () => {
       try {
@@ -56,68 +52,86 @@ export const useATCStore = create<ATCStore>()((...a) => {
   } as any;
 });
 
-// Slice decoupling via EventBus
-atcEventBus.on('SYSTEM_ACTION', ({ action, pVal }) => {
-  const store = useATCStore.getState();
-  if (action === 'SCALE') store.setTrafficIntensityLocal(Number(pVal));
-  if (action === 'STOP' || action === 'START') {
-    const isStop = action === 'STOP';
-    store.markAction('', 'globalStop', isStop);
-  }
-  if (action === 'OVERRIDE') {
-    store.markAction('', 'overrideSignal', true);
-    store.markAction('', 'holder', 'USER');
-  }
-  if (action === 'RELEASE') {
-    store.markAction('', 'overrideSignal', false);
-    store.markAction('', 'holder', null);
-  }
-});
+// NOTE: Prevent duplicate event listeners on hot reload
+let eventBusInitialized = false;
 
-atcEventBus.on('AGENT_ACTION', ({ action, actualUuid, pVal, agents }) => {
-  const store = useATCStore.getState();
-  const agent = agents.find(a => a.uuid === actualUuid);
-  
-  switch (action) {
-    case 'PAUSE': 
-      if (agent && !agent.isPaused) store.markAction(actualUuid, 'isPaused', true); 
-      break;
-    case 'RESUME': 
-      if (agent && agent.isPaused) store.markAction(actualUuid, 'isPaused', false); 
-      break;
-    case 'PRIORITY': 
-      if (agent && !agent.priority) store.markAction(actualUuid, 'priority', true); 
-      break;
-    case 'REVOKE': 
-      if (agent && agent.priority) store.markAction(actualUuid, 'priority', false); 
-      break;
-    case 'RENAME': 
-      if (pVal) store.markAction(actualUuid, 'displayName', String(pVal)); 
-      break;
-    case 'CONFIG':
-      if (pVal) {
-        try {
-          const configUpdates = JSON.parse(pVal);
-          store.updateAgentConfigLocal(actualUuid, configUpdates);
-        } catch {
-          logger.error("Invalid CONFIG JSON in proposal:", pVal);
-        }
-      }
-      break;
-    case 'TERMINATE': {
-      if (agents.length > 1) {
-        store.markAction(actualUuid, '', null, true);
-        store.setTrafficIntensityLocal(Math.max(0, agents.length - 1));
-      }
-      break;
+export const initATCEventBus = () => {
+  if (eventBusInitialized) return;
+  eventBusInitialized = true;
+
+  // NOTE: Slice decoupling via EventBus
+  atcEventBus.on('SYSTEM_ACTION', ({ action, pVal }) => {
+    const store = useATCStore.getState();
+    if (action === 'SCALE') store.setTrafficIntensityLocal(Number(pVal));
+    if (action === 'STOP' || action === 'START') {
+      const isStop = action === 'STOP';
+      store.markAction('', 'globalStop', isStop);
     }
-    case 'TRANSFER': 
-      store.markAction('', 'forcedCandidate', actualUuid);
-      break;
-  }
-});
+    if (action === 'OVERRIDE') {
+      store.markAction('', 'overrideSignal', true);
+      store.markAction('', 'holder', 'USER');
+    }
+    if (action === 'RELEASE') {
+      store.markAction('', 'overrideSignal', false);
+      store.markAction('', 'holder', null);
+    }
+  });
 
-// Expose store to window for E2E testing
-if (typeof window !== 'undefined' && (import.meta.env.MODE !== 'production' || import.meta.env.VITE_USE_MSW === 'true')) {
+  atcEventBus.on('AGENT_ACTION', ({ action, actualUuid, pVal, agents }) => {
+    const store = useATCStore.getState();
+    const agent = agents.find(a => a.uuid === actualUuid);
+    
+    switch (action) {
+      case 'PAUSE': 
+        if (agent && !agent.isPaused) store.markAction(actualUuid, 'isPaused', true); 
+        break;
+      case 'RESUME': 
+        if (agent && agent.isPaused) store.markAction(actualUuid, 'isPaused', false); 
+        break;
+      case 'PRIORITY': 
+      case 'PRIORITY_HIGH':
+        if (agent && !agent.priority) store.markAction(actualUuid, 'priority', true); 
+        break;
+      case 'REVOKE': 
+      case 'PRIORITY_LOW':
+      case 'PRIORITY_NORMAL':
+        if (agent && agent.priority) store.markAction(actualUuid, 'priority', false); 
+        break;
+      case 'RENAME': 
+        if (pVal) store.markAction(actualUuid, 'displayName', String(pVal)); 
+        break;
+      case 'CONFIG':
+        if (pVal) {
+          try {
+            const configUpdates = JSON.parse(pVal);
+            store.updateAgentConfigLocal(actualUuid, configUpdates);
+          } catch {
+            logger.error("Invalid CONFIG JSON in proposal:", pVal);
+          }
+        }
+        break;
+      case 'TERMINATE': {
+        if (agents.length > 1) {
+          store.markAction(actualUuid, '', null, true);
+          store.setTrafficIntensityLocal(Math.max(0, agents.length - 1));
+        }
+        break;
+      }
+      case 'TRANSFER': 
+        store.markAction('', 'forcedCandidate', actualUuid);
+        break;
+    }
+  });
+
+  // NOTE: Handle async IDB persistence outside of React render cycle
+  atcEventBus.on('AUDIT_LOG_ADDED', (log) => {
+    idbService.addAuditLog(log).catch(err => logger.error("IDB Add Error", err));
+  });
+};
+
+initATCEventBus();
+
+// NOTE: Expose store to window for E2E testing
+if (typeof window !== 'undefined' && (import.meta.env?.MODE !== 'production' || import.meta.env?.VITE_USE_MSW === 'true')) {
   (window as unknown as { useATCStore: unknown }).useATCStore = useATCStore;
 }

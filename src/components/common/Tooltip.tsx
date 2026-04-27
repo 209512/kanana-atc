@@ -1,4 +1,3 @@
-// src/components/common/Tooltip.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';

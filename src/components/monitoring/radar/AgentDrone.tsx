@@ -1,4 +1,3 @@
-// src/components/monitoring/radar/AgentDrone.tsx
 import React, { useRef, useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html, Line as DreiLine } from '@react-three/drei';
@@ -31,6 +30,12 @@ interface AgentDroneProps {
     };
 }
 
+// NOTE: Helper function to safely convert values to numbers
+const getSafeNumber = (val: any, fallback: number): number => {
+    const num = Number(val);
+    return isNaN(num) ? fallback : num;
+};
+
 export const AgentDrone = React.memo(({ 
     agent, isLocked, isOverride, isGlobalStopped, isForced, isAiProposed,
     isAdminMuted, onClick, compact = false, actions
@@ -52,13 +57,56 @@ export const AgentDrone = React.memo(({
     const dotsGroupRef = useRef<THREE.Group>(null);
     const lineRef = useRef<any>(null);
 
+    const safeSeed = getSafeNumber(agent.seed, 0);
     const accumulatedTime = useRef(0);
-    const currentAngle = useRef((agent.seed || 0) * (Math.PI * 2));
+    const currentAngle = useRef(safeSeed * (Math.PI * 2));
 
     useEffect(() => {
         if (isLocked && !prevLocked.current) playSuccess();
         prevLocked.current = isLocked;
     }, [isLocked, playSuccess]);
+
+    // NOTE: Memory leak prevention - dispose geometries and materials on unmount
+    useEffect(() => {
+        return () => {
+            if (groupRef.current) {
+                groupRef.current.traverse((child) => {
+                    const mesh = child as THREE.Mesh;
+                    if (mesh.isMesh) {
+                        if (mesh.geometry) mesh.geometry.dispose();
+                        if (mesh.material) {
+                            if (Array.isArray(mesh.material)) {
+                                mesh.material.forEach(m => m.dispose());
+                            } else {
+                                mesh.material.dispose();
+                            }
+                        }
+                    }
+                });
+            }
+        };
+    }, []);
+
+    // NOTE: Memory leak prevention for dots
+    useEffect(() => {
+        return () => {
+            if (dotsGroupRef.current) {
+                dotsGroupRef.current.traverse((child) => {
+                    const mesh = child as THREE.Mesh;
+                    if (mesh.isMesh) {
+                        if (mesh.geometry) mesh.geometry.dispose();
+                        if (mesh.material) {
+                            if (Array.isArray(mesh.material)) {
+                                mesh.material.forEach(m => m.dispose());
+                            } else {
+                                mesh.material.dispose();
+                            }
+                        }
+                    }
+                });
+            }
+        };
+    }, []);
 
     useEffect(() => {
         if (!isPaused) {
@@ -72,33 +120,35 @@ export const AgentDrone = React.memo(({
         if (!groupRef.current) return;
         
         if (!isPaused) {
-            // Delta time이 너무 크면(예: 탭 백그라운드 전환) 스킵하여 드론이 비정상적으로 빨리 움직이는 현상 방지
+            // NOTE: Skip large delta times to prevent drones moving too fast (e.g., background tab)
             if (delta < 0.1) {
                 accumulatedTime.current += delta;
                 
-                // 에이전트 부하량(baseLoad)에 비례하여 공전 속도를 결정 (Load가 높을수록 미세하게 빨라짐)
-                const loadFactor = (agent.baseLoad || 30) / 100; // 0.1 ~ 1.0
+                // NOTE: Orbit speed proportional to baseLoad
+                const safeLoad = getSafeNumber(agent.metrics?.load, 30);
+                const loadFactor = safeLoad / 100; // 0.1 ~ 1.0
                 const baseSpeed = 0.15 + (loadFactor * 0.15); // 0.15 ~ 0.30
-                const speedNoise = Math.cos(accumulatedTime.current * 0.5 + (agent.seed || 0)) * 0.05;
-                const direction = ((agent.seed || 0) % 2 === 0) ? 1 : -1;
+                const speedNoise = Math.cos(accumulatedTime.current * 0.5 + safeSeed) * 0.05;
+                const direction = (safeSeed % 2 === 0) ? 1 : -1;
                 
-                // 누적 시간이 아닌 delta에 속도를 곱하여 더함으로써 Load가 변해도 궤도가 튀지 않도록 함
+                // NOTE: Add delta * speed instead of total time to prevent orbit jumps on Load change
                 currentAngle.current += delta * (baseSpeed + speedNoise) * direction;
             }
         }
         
-        // 불규칙적이고 자연스러운 궤도를 위해 seed 기반 노이즈 추가 및 중앙 집중 분산
-        // 기존 반경이 너무 중앙에 몰려있어 5.0 ~ 20.0으로 널찍하게 퍼뜨림
-        const baseRadius = 6 + ((agent.seed || 0) % 15);
-        const radiusNoise = Math.sin(accumulatedTime.current * 0.5 + (agent.seed || 0)) * 1.5;
+        // NOTE: Seed-based noise for natural orbit and dispersion
+        // NOTE: Spread radius to 5.0~20.0 instead of clustering in center
+        const baseRadius = 6 + (safeSeed % 15);
+        const radiusNoise = Math.sin(accumulatedTime.current * 0.5 + safeSeed) * 1.5;
         const radius = baseRadius + radiusNoise;
         
         const angle = currentAngle.current;
         
         const targetX = Math.cos(angle) * radius;
-        // y축(고도)에도 불규칙성을 부여
-        const yNoise = Math.sin(accumulatedTime.current * 0.8 + (agent.seed || 0) * 2) * 2.0;
-        const targetY = (((agent.index || 0) % 4) - 1.5) * 1.5 + yNoise;
+        // NOTE: Add irregularity to y-axis (altitude)
+        const yNoise = Math.sin(accumulatedTime.current * 0.8 + safeSeed * 2) * 2.0;
+        const safeIndex = getSafeNumber(agent.index, 0);
+        const targetY = ((safeIndex % 4) - 1.5) * 1.5 + yNoise;
         const targetZ = Math.sin(angle) * radius;
 
         targetVec.current.set(targetX, targetY, targetZ);
@@ -110,12 +160,12 @@ export const AgentDrone = React.memo(({
             groupRef.current.position.lerp(targetVec.current, lerpFactor);
             groupRef.current.rotation.y += isForced ? RADAR_CONFIG.DRONE.ROTATION_FORCED : (isAiProposed ? RADAR_CONFIG.DRONE.ROTATION_AI : RADAR_CONFIG.DRONE.ROTATION_SPEED);
             
-            // 미세한 노이즈 (바람에 흔들리는 호버링 효과)
-            const hoverNoise = Math.sin(accumulatedTime.current * 2.0 + (agent.seed || 0)) * 0.015;
+            // NOTE: Fine noise for wind-blown hovering effect
+            const hoverNoise = Math.sin(accumulatedTime.current * 2.0 + safeSeed) * 0.015;
             groupRef.current.position.y += Math.sin(accumulatedTime.current * 0.8) * 0.0015 + hoverNoise;
             
-            // z축 방향으로도 미세한 난기류(Turbulence) 노이즈 추가
-            const windNoiseZ = Math.cos(accumulatedTime.current * 1.5 + (agent.seed || 0)) * 0.008;
+            // NOTE: Fine turbulence noise on z-axis
+            const windNoiseZ = Math.cos(accumulatedTime.current * 1.5 + safeSeed) * 0.008;
             groupRef.current.position.z += windNoiseZ;
         }
         

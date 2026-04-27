@@ -1,4 +1,3 @@
-// src/utils/agentStyles.ts
 import clsx from 'clsx';
 
 interface AgentCardStyleProps {
@@ -27,7 +26,7 @@ export const getAgentCardStyle = ({
     const base = "rounded border transition-all relative overflow-hidden group";
     const effectivelyPaused = isPaused || globalStop;
     
-    // 1. AI 제안 상태
+    
     if (isAiProposed) {
         return clsx(
             base, 
@@ -36,22 +35,22 @@ export const getAgentCardStyle = ({
         );
     }
 
-    // 2. 비상 상황
+    
     if (overrideSignal) {
         return clsx(base, "bg-red-950/60 border-red-500 shadow-[inset_0_0_20px_rgba(239,68,68,0.2)] z-30");
     }
 
-    // 3. 강제 할당 시도
+    
     if (isForced) {
         return clsx(base, "ring-2 ring-purple-500 animate-pulse bg-purple-500/10 z-20");
     }
 
-    // 4. 제어권 소유자 (Locked)
+    
     if (isLocked) {
         return clsx(base, isDark ? "bg-emerald-500/15 border-emerald-500" : "bg-emerald-50 border-emerald-400 shadow-sm");
     }
 
-    // 5. 일시정지
+    
     if (effectivelyPaused) {
         return clsx(
             base, 
@@ -62,7 +61,7 @@ export const getAgentCardStyle = ({
         );
     }
     
-    // 6. 우선순위
+    
     if (isPriority) {
         return clsx(
             base, 
@@ -72,12 +71,12 @@ export const getAgentCardStyle = ({
         );
     }
 
-    // 7. 선택됨
+    
     if (isSelected) {
         return clsx(base, isDark ? "bg-blue-900/20 border-blue-500" : "bg-blue-50 border-blue-400");
     }
     
-    // 기본 상태 (Idle)
+    
     return clsx(base, isDark ? "bg-gray-800/30 border-gray-800" : "bg-white border-slate-200");
 };
 

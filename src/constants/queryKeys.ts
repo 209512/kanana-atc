@@ -1,4 +1,3 @@
-// src/constants/queryKeys.ts
 export const queryKeys = {
   all: ['atc'] as const,
   auth: () => [...queryKeys.all, 'auth'] as const,

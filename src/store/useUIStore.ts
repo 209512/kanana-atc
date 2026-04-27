@@ -1,4 +1,3 @@
-// src/store/useUIStore.ts
 import { create } from 'zustand';
 
 interface UIStore {
@@ -44,7 +43,7 @@ export const useUIStore = create<UIStore>((set) => ({
   setQueueOpen: (isOpen) => set({ isQueueOpen: isOpen }),
   setSidebarWidth: (value) => set((state) => {
     const newWidth = typeof value === 'function' ? value(state.sidebarWidth) : value;
-    // 드래그 중 일정 너비 이하로 가면 자동으로 collapsed 처리
+    
     return { 
       sidebarWidth: newWidth,
       isSidebarCollapsed: newWidth < 150 
@@ -53,7 +52,7 @@ export const useUIStore = create<UIStore>((set) => ({
   isSidebarCollapsed: false,
   toggleSidebar: () => set((state) => ({ 
     isSidebarCollapsed: !state.isSidebarCollapsed,
-    // 펼칠 때 이전 너비가 너무 작았다면 기본값 450으로 복원
+    
     sidebarWidth: state.isSidebarCollapsed ? (state.sidebarWidth < 150 ? 450 : state.sidebarWidth) : state.sidebarWidth
   })),
   selectedAgentId: null,

@@ -1,5 +1,5 @@
-// vite-env.d.ts
-/// <reference types="vite/client" />
+// NOTE: vite-env.d.ts
+// NOTE: / <reference types="vite/client" />
 
 interface ImportMetaEnv {
   readonly VITE_API_URL: string;

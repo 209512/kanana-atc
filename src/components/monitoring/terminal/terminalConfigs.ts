@@ -1,7 +1,6 @@
-// src/components/monitoring/terminal/terminalConfigs.ts
 import { LOG_LEVELS } from '@/utils/logStyles';
 
-/* 터미널 UI 테마 설정 */
+/* Terminal UI Theme Configuration */
 export const THEME_COLORS = {
   insight: {
     base: "text-sky-400",
@@ -36,7 +35,7 @@ export interface FilterConfig {
   types?: string[];
 }
 
-/* 로그 필터 버튼 구성 */
+/* Log Filter Configuration */
 export const LOG_FILTER_CONFIG: FilterConfig[] = [
   { label: 'ALL',  value: 'ALL',      shortcut: 'A' },
   { label: 'INFO', value: 'info',     shortcut: 'I' },
@@ -50,7 +49,7 @@ export const LOG_FILTER_CONFIG: FilterConfig[] = [
   { label: 'EXE',  value: 'exec',     shortcut: 'X' },
 ];
 
-/* 특정 로그의 타입이 설정된 필터 값에 해당하는지 체크하는 헬퍼 */
+/* Helper to check if a log type matches the selected filter */
 export const matchLogType = (logType: string, filterValue: string): boolean => {
   if (filterValue === 'ALL') return true;
   const config = LOG_FILTER_CONFIG.find(c => c.value === filterValue);

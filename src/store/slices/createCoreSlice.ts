@@ -1,4 +1,3 @@
-// src/store/slices/createCoreSlice.ts
 import { StateCreator } from 'zustand';
 import { ATCStore, CoreSlice } from './types';
 import { LogEntry } from '@/contexts/atcTypes';
@@ -30,19 +29,35 @@ export const createCoreSlice: StateCreator<
   setAgents: (updater) => set((s) => ({ agents: typeof updater === 'function' ? updater(s.agents) : updater })),
   
   addLog: (message, type, agentId) => {
-    const newLog: LogEntry = {
-      id: `ui-${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: Date.now(),
-      message, type, agentId
-    };
     set((s) => {
-      // GC optimization: slice instead of spread
-      const logs = s.state.logs.slice();
-      logs.push(newLog);
-      if (logs.length > 1000) {
-        logs.shift(); // Evict oldest log
+      let resolvedAgentName = undefined;
+      if (agentId && !['SYSTEM', 'USER', 'ADMIN', 'POLICY'].includes(agentId.toUpperCase())) {
+        const foundAgent = s.agents.find(a => a.uuid === agentId || a.id === agentId);
+        if (foundAgent) {
+          resolvedAgentName = foundAgent.displayId || foundAgent.displayName || foundAgent.name || `Agent-Unknown`;
+        } else if (type === 'insight' || type === 'exec' || type === 'proposal') {
+          resolvedAgentName = 'SYSTEM';
+        } else {
+          resolvedAgentName = `Agent-Unknown`;
+        }
+      } else {
+        resolvedAgentName = agentId;
       }
-      return { state: { ...s.state, logs } };
+
+      const newLog: LogEntry = {
+        id: `ui-${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: Date.now(),
+        message, 
+        type, 
+        agentId,
+        agentName: resolvedAgentName
+      };
+
+      // NOTE: Only keep the latest 100 logs to prevent memory leak and lag, DO NOT clear all logs
+      const maxLogs = 100;
+      const newLogs = [...s.state.logs, newLog].slice(-maxLogs);
+      
+      return { state: { ...s.state, logs: newLogs } };
     });
   },
 

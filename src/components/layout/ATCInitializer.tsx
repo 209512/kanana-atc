@@ -1,4 +1,3 @@
-// src/components/layout/ATCInitializer.tsx
 import React, { useEffect } from 'react';
 import { useATCStore } from '@/store/useATCStore';
 import { useATCStream } from '@/hooks/system/useATCStream';
@@ -17,17 +16,17 @@ export const ATCInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
   
   const { scaleAgents } = useAgentMutations();
   
-  // 1. Stream Initialization
+  // NOTE: Stream Initialization
   useATCStream();
 
-  // 2. Audio Initialization
+  // NOTE: Audio Initialization
   const { playAlert, playSuccess, playClick } = useAudio(isAdminMuted);
   
   useEffect(() => {
     useATCStore.setState({ playAlert, playSuccess, playClick });
   }, [playAlert, playSuccess, playClick]);
 
-  // 3. Autonomy Risk Calculation
+  // NOTE: Autonomy Risk Calculation
   const { riskScore, autonomyLevel, recordAction, checkDeltaSafety } = useAutonomy(state, agents, addLog);
   
   useEffect(() => {
@@ -40,13 +39,13 @@ export const ATCInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [isAiAutoMode, checkDeltaSafety, triggerHandover]);
 
-  // 4. Initial Scale (Stale Closure Bug 해결)
+  
   useEffect(() => {
-    // scaleAgents 호출 시 Zustand 스토어 업데이트 및 서버 요청이 이루어지므로,
-    // Strict Mode 환경(개발 모드)에서 2번 렌더링되면서 중복 호출되지 않도록 방어 로직 추가
+    
+    
     let mounted = true;
     
-    // 컴포넌트 마운트 시 최신 상태를 Zustand Store에서 직접 조회하여 Stale Closure 방지
+    
     const currentState = useATCStore.getState().state;
     const currentAgents = useATCStore.getState().agents;
 
@@ -59,7 +58,7 @@ export const ATCInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
     return () => { mounted = false; };
-  }, []); // 마운트 시 1회만 실행하되 최신 상태를 직접 조회하므로 무한 루프 위험 제거
+  }, []); 
 
   return (
     <>

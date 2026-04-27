@@ -1,4 +1,3 @@
-// src/utils/ocrService.ts
 import { createWorker, Worker } from 'tesseract.js';
 import { logger } from './logger';
 
@@ -39,7 +38,7 @@ class OcrService {
    */
   async scanForPii(imageUrl: string): Promise<boolean> {
     try {
-      // 1. Wait for initialization if not ready (Promise-based lock)
+      // NOTE: Wait for initialization if not ready (Promise-based lock)
       if (!this.worker) {
         await this.init();
       }
@@ -49,9 +48,9 @@ class OcrService {
         return false; 
       }
 
-      // 2. Concurrency Control (Single Tesseract worker instance cannot handle parallel recognize calls safely)
+      // NOTE: Concurrency Control for Tesseract worker
       while (this.isScanning) {
-        // Polling lock for parallel scan requests
+        // NOTE: Polling lock for parallel scan requests
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
@@ -70,8 +69,8 @@ class OcrService {
     } catch (error) {
       this.isScanning = false;
       logger.error('[OCR_SCAN_ERROR]', error);
-      // In case of error, we default to allowing the upload so we don't break the UX completely,
-      // but log it for monitoring.
+      // NOTE: In case of error, we default to allowing the upload so we don't break the UX completely,
+      // NOTE: but log it for monitoring
       return false;
     }
   }
@@ -79,23 +78,23 @@ class OcrService {
   private detectPii(text: string): boolean {
     if (!text) return false;
     
-    // Normalize text (remove all whitespace and dashes for easier matching)
+    // NOTE: Normalize text (remove all whitespace and dashes for easier matching)
     const normalized = text.replace(/[\s-]/g, '');
 
-    // 1. RRN / Alien Registration Number (주민등록번호/외국인등록번호)
-    // Format: 6 digits + 7 digits
+    
+    // NOTE: Format: 6 digits + 7 digits
     const rrnRegex = /\d{6}\d{7}/;
     
-    // 2. Phone Number (휴대전화 번호)
-    // Format: 01X + 3~4 digits + 4 digits
+    
+    // NOTE: Format: 01X + 3~4 digits + 4 digits
     const phoneRegex = /01[016789]\d{3,4}\d{4}/;
     
-    // 3. Email (이메일)
-    // Check against original text to preserve @ and dots
+    
+    // NOTE: Check against original text to preserve @ and dots
     const emailRegex = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 
-    // 4. Credit Card (신용카드 번호)
-    // Format: 14~16 digits
+    
+    // NOTE: Format: 14~16 digits
     const cardRegex = /\d{14,16}/;
 
     return rrnRegex.test(normalized) || 

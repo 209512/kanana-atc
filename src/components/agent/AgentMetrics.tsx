@@ -1,4 +1,3 @@
-// src/components/agent/AgentMetrics.tsx
 import React from 'react';
 import { Zap, Clock, Hash, Activity } from 'lucide-react';
 import { Tooltip } from '@/components/common/Tooltip';
@@ -35,7 +34,7 @@ const MetricBox = ({ label, value, isDark, icon, tooltip }: MetricBoxProps) => (
 );
 
 export const AgentMetrics = ({ isDark, agent }: { isDark: boolean, agent?: Agent }) => {
-    // 시뮬레이션 값 생성 (React 컴포넌트의 순수성을 유지하기 위해 useRef로 초기값 고정 또는 useMemo 외부에 의존)
+    
     const [randTs] = React.useState(() => (Math.random() * 15 + 35).toFixed(1));
     const [randLat] = React.useState(() => (Math.random() * 50 + 150).toFixed(0));
     const [randTot] = React.useState(() => (Math.random() * 2000 + 800).toFixed(0));

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ocrService } from './ocrService';
 
-// Mock Tesseract.js since WebAssembly OCR won't easily run in this test environment
+// NOTE: Mock Tesseract.js since WebAssembly OCR won't easily run in this test environment
 vi.mock('tesseract.js', () => ({
   createWorker: vi.fn().mockResolvedValue({
     recognize: vi.fn().mockImplementation((url: string) => {
-      // Return fake text based on URL to simulate detection
+      // NOTE: Return fake text based on URL to simulate detection
       if (url.includes('pii_rrn')) return Promise.resolve({ data: { text: '홍길동 900101-1234567 서울시' } });
       if (url.includes('pii_phone')) return Promise.resolve({ data: { text: '연락처: 010-1234-5678 입니다.' } });
       if (url.includes('pii_email')) return Promise.resolve({ data: { text: '이메일: secret@kakao.com' } });
@@ -17,12 +17,12 @@ vi.mock('tesseract.js', () => ({
 }));
 
 describe('OCR Service PII Detection', () => {
-  it('should detect RRN (주민등록번호) in image', async () => {
+  it('should detect RRN in image', async () => {
     const hasPii = await ocrService.scanForPii('pii_rrn');
     expect(hasPii).toBe(true);
   });
 
-  it('should detect Phone Number (휴대전화) in image', async () => {
+  it('should detect Phone Number in image', async () => {
     const hasPii = await ocrService.scanForPii('pii_phone');
     expect(hasPii).toBe(true);
   });
@@ -38,7 +38,7 @@ describe('OCR Service PII Detection', () => {
   });
 
   it('should wait for initialization if called concurrently', async () => {
-    // Both calls should succeed and wait for the same init if they are called simultaneously
+    // NOTE: Both calls should succeed and wait for the same init if they are called simultaneously
     const p1 = ocrService.scanForPii('pii_rrn');
     const p2 = ocrService.scanForPii('pii_rrn');
     

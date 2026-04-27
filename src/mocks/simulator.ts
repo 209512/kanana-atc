@@ -1,4 +1,3 @@
-// src/mocks/simulator.ts
 import { v4 as uuidv4 } from 'uuid';
 import { ATC_CONFIG } from '@/constants/atcConfig';
 
@@ -34,7 +33,7 @@ class ATCSimulator {
     logs: [] as any[],
     activeAgentCount: 2,
     overrideSignal: false,
-    fencingToken: 1000,
+    fencingToken: Number(import.meta.env?.VITE_INITIAL_FENCING_TOKEN) || 1000,
     latency: 12,
     trafficIntensity: 2,
   };
@@ -71,7 +70,7 @@ class ATCSimulator {
 
   createAgent(id: string, index?: number): MockAgent {
     const finalIndex = index ?? this.getNextAvailableIndex();
-    const isGemini = finalIndex === 1 || import.meta.env.VITE_DEFAULT_AGENT_PROVIDER === 'gemini';
+    const isGemini = finalIndex === 1 || import.meta.env?.VITE_DEFAULT_AGENT_PROVIDER === 'gemini';
     return {
       uuid: id,
       id: id,
@@ -101,17 +100,17 @@ class ATCSimulator {
     const agent = this.agents.get(agentId);
     const displayName = overrideName 
       || agent?.displayName 
-      || (['SYSTEM', 'POLICY', 'USER', 'ADMIN'].includes(agentId) ? agentId : `NODE_${agentId.substring(0, 4)}`);
+      || (['SYSTEM', 'POLICY', 'USER', 'ADMIN'].includes(agentId) ? agentId : `Agent-Unknown`);
       
     const logEntry = {
       id: `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       agentId: agentId || 'SYSTEM',
-      agentName: displayName,
+      agentName: displayName, // Creation time resolution
       message: message || '',
       timestamp: Date.now(),
       type
     };
-    // GC: 로그 500개 유지 (메모리 블로트 방지)
+    // NOTE: GC: Keep 500 logs to prevent memory bloat
     this.state.logs = [...this.state.logs.slice(-499), logEntry];
   }
 
@@ -122,7 +121,7 @@ class ATCSimulator {
   update() {
     const now = Date.now();
 
-    // Global stop / Override
+    // NOTE: Global stop / Override
     if (this.state.globalStop || this.state.overrideSignal) {
       if (this.state.globalStop) {
         this.state.holder = null;
@@ -131,7 +130,7 @@ class ATCSimulator {
       return;
     }
 
-    // Ghost Agent validation
+    // NOTE: Ghost Agent validation
     if (this.state.holder && !this.agents.has(this.state.holder)) this.state.holder = null;
     if (this.state.forcedCandidate && !this.agents.has(this.state.forcedCandidate)) this.state.forcedCandidate = null;
 
@@ -139,7 +138,7 @@ class ATCSimulator {
     const aliveAgents = allAgents.filter(a => !a.isPaused);
     const aliveUids = aliveAgents.map(a => a.uuid);
 
-    // Transfer-Lock assignment
+    // NOTE: Transfer-Lock assignment
     if (this.state.forcedCandidate) {
       if (now >= this.lockExpiry) {
         const targetId = this.state.forcedCandidate;
@@ -154,9 +153,9 @@ class ATCSimulator {
       return;
     }
 
-    // Load variation & contention logic
+    // NOTE: Load variation & contention logic
     aliveAgents.forEach((agent) => {
-      // Base Load fluctuation
+      // NOTE: Base Load fluctuation
       if (agent.status !== 'error') {
         let newBaseLoad = (agent.baseLoad || 30) + (Math.random() * 10 - 5);
         newBaseLoad = Math.max(10, Math.min(100, newBaseLoad));
@@ -175,11 +174,11 @@ class ATCSimulator {
           openai: '/api/openai',
           anthropic: '/api/anthropic'
         };
-          const endpoint = endpointMap[agent.provider];
-          if (!endpoint) return;
+        const endpoint = endpointMap[agent.provider];
+        if (!endpoint) return;
         const lastCall = this.lastGeminiCalls.get(agent.uuid) || 0;
         
-        // Event Push: Trigger AI assessment randomly (10% chance) after a 20s cooldown
+        // NOTE: Event Push: Trigger AI assessment randomly (10% chance) after a 20s cooldown
         if (now - lastCall > 20000) {
           this.lastGeminiCalls.set(agent.uuid, now);
           
@@ -188,13 +187,13 @@ class ATCSimulator {
             const currentRiskLevel = (uiState.state as any).risk_level || 0;
             
             const externalData: Record<string, string> = {
-              location: import.meta.env.VITE_ATC_REGION || "Seoul",
+              location: import.meta.env?.VITE_ATC_REGION || "Seoul",
               weather: Math.random() > 0.5 ? "Heavy Rain & Strong Winds" : "Dry & Clear",
               news: Math.random() > 0.5 ? "Urban Fire Detected" : "Marine SOS Signal Detected",
               risk_level: String(currentRiskLevel),
             };
 
-            // IDB Image Consume & GC
+            // NOTE: IDB Image Consume & GC
             let base64Image = undefined;
             const transientImg = getTransientImage();
             if (transientImg) {
@@ -202,23 +201,30 @@ class ATCSimulator {
                setTransientImage(null);
             }
 
-            fetch(endpoint, {
+            import('@/utils/apiClient').then(({ request }) => {
+              // NOTE: Create a shallow copy of the state, excluding the potentially massive 'logs' array
+              // NOTE: to prevent 413 Payload Too Large errors from the Gemini endpoint
+              const stateCopy = { ...this.state };
+              if (stateCopy.logs) {
+                 stateCopy.logs = stateCopy.logs.slice(-3); // Keep only the last 3 logs to give context without bloating
+              }
+
+              request(endpoint, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   agentId: agent.id,
                   agentName: agent.displayName,
                   systemPrompt: agent.systemPrompt,
                   persona: agent.persona,
-                  state: this.state,
+                  model: agent.model,
+                  state: stateCopy,
                   externalData: externalData,
                   image: base64Image
                 })
               })
-              .then(res => res.json())
               .then(data => {
                 if (data.log) {
-                  // Parse JSON safely
+                  // NOTE: Parse JSON safely
                   let parsedData: any = {};
                   try {
                     parsedData = JSON.parse(data.log);
@@ -227,20 +233,20 @@ class ATCSimulator {
                     if (jsonMatch) {
                       try {
                         parsedData = JSON.parse(jsonMatch[0]);
-                      } catch(innerE) {}
+                      } catch(innerE) { logger.warn('Failed to parse Gemini log text as JSON', innerE); }
                     }
                   }
 
-                  // Determine Severity
+                  // NOTE: Determine Severity
                   let severity = 'info';
                   if (parsedData.risk_level && parsedData.risk_level >= 8) severity = 'critical';
                   else if (parsedData.risk_level && parsedData.risk_level >= 5) severity = 'warn';
                   
                   const msg = parsedData.message || data.log;
                   
-                  this.addLog(agent.uuid, `[Gemini Intelligence] ${msg}`, severity);
+                  this.addLog(agent.uuid, msg, severity); // NOTE: Removed [Gemini Intelligence] prefix for better immersion
 
-                  // Auto-Protocol: Force PAUSE if critical risk
+                  // NOTE: Auto-Protocol: Force PAUSE if critical risk
                   if (parsedData.risk_level >= 9 || data.log.includes('"risk_level": 9') || data.log.includes('"risk_level": 10') || data.log.includes('"risk_level":9') || data.log.includes('"risk_level":10') || data.log.includes('[RISK_LEVEL:9]') || data.log.includes('[RISK_LEVEL:10]')) {
                     this.updateAgent(agent.uuid, { isPaused: true });
                     this.addLog(agent.uuid, `[Gemini Auto-Protocol] Auto-PAUSE executed.`, 'exec');
@@ -264,6 +270,7 @@ class ATCSimulator {
             .catch(err => {
               logger.error('Gemini Agent Fetch Error:', err);
             });
+            });
           }
         }
       }
@@ -286,7 +293,7 @@ class ATCSimulator {
             }
           }
           
-          // Generate random waiting load
+          // NOTE: Generate random waiting load
           const randomLoad = Math.floor(Math.random() * 100);
           this.updateAgent(agent.uuid, {
             status: 'waiting',
@@ -296,7 +303,7 @@ class ATCSimulator {
       }
     });
 
-    // Normal Assignment
+    // NOTE: Normal Assignment
     if (!this.state.holder || now > this.lockExpiry) {
       if (aliveUids.length > 0) {
         const priorityPool = this.state.priorityAgents.filter(id => aliveUids.includes(id));

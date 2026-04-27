@@ -1,4 +1,3 @@
-// src/components/layout/SidebarContainer.tsx
 import React, { useState, useEffect } from 'react';
 import clsx from 'clsx';
 import { useUIStore } from '@/store/useUIStore';
@@ -36,21 +35,23 @@ export const SidebarContainer = () => {
     return (
         <>
             <aside 
-                ref={sidebarRef}
-                className={clsx(
-                    "h-screen border-l flex flex-col shadow-[-10px_0_30px_rgba(0,0,0,0.3)] backdrop-blur-xl pointer-events-auto relative sidebar-container", // fixed는 App.tsx에서 처리
-                    isDark ? "bg-[#0d1117]/85 border-white/5 text-gray-300" : "bg-white/80 border-slate-200/40 text-slate-800",
-                    !isResizing && "transition-all duration-300"
-                )}
-                style={{ width: actualWidth }}
-            >
+                    ref={sidebarRef}
+                    className={clsx(
+                        "h-screen border-l flex flex-col shadow-[-10px_0_30px_rgba(0,0,0,0.3)] backdrop-blur-xl pointer-events-auto relative sidebar-container",
+                        "md:static fixed right-0 top-0 bottom-0 z-50", 
+                        isDark ? "bg-[#0d1117]/85 border-white/5 text-gray-300" : "bg-white/80 border-slate-200/40 text-slate-800",
+                        !isResizing && "transition-all duration-300",
+                        isSidebarCollapsed ? "translate-x-0" : "translate-x-0 md:translate-x-0"
+                    )}
+                    style={{ width: actualWidth }}
+                >
                 {/* Resizer */}
                 {!isSidebarCollapsed && (
                     <div 
                         onMouseDown={handleMouseDown}
                         className="absolute top-0 bottom-0 left-[-8px] w-4 cursor-col-resize z-[60] group"
                     >
-                        {/* 가이드 라인 */}
+                        {/* Guide Lines */}
                         <div className={clsx(
                             "absolute right-[7px] top-0 bottom-0 w-[1.5px] transition-colors",
                             isResizing 
@@ -60,7 +61,7 @@ export const SidebarContainer = () => {
                     </div>
                 )}
 
-                {/* 사이드바 접기/펼치기 토글 버튼 (왼쪽 가장자리에 튀어나온 형태) */}
+                {/* Toggle Collapse Button */}
                 <button
                     onClick={toggleSidebar}
                     className={clsx(

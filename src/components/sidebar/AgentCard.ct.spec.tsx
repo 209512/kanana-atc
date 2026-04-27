@@ -31,6 +31,6 @@ test('Should render AgentCard with correct agent information', async ({ mount })
     </Reorder.Group>
   );
 
-  // We just verify it mounts without crashing. Framer Motion might hide elements during initial render.
+  // NOTE: Verify mounting without crashing
   await expect(component).toBeVisible();
 });

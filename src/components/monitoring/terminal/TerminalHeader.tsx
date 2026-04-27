@@ -1,4 +1,3 @@
-// src/components/monitoring/terminal/TerminalHeader.tsx
 import React from 'react';
 import clsx from 'clsx';
 import { Brain, Lightbulb, Activity, Save, ArrowDownCircle, VolumeX, Volume2, ChevronDown, X } from 'lucide-react';

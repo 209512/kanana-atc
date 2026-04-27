@@ -1,4 +1,3 @@
-// src/contexts/atcTypes.ts
 import { LogType } from '@/utils/logStyles';
 
 export interface AIProposal {
@@ -23,6 +22,7 @@ export interface ParsedAction {
 export interface LogEntry {
   id: string;
   agentId?: string;
+  agentName?: string; // Resolved name at creation time
   message: string;
   messageStd?: string;
   messageTech?: string;

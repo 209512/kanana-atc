@@ -1,19 +1,20 @@
-// src/utils/privacyFilter.ts
 export const applyPrivacyMasking = (text: string): string => {
   if (typeof text !== 'string') return text;
   if (!text) return text;
   
   let maskedText = text;
 
-  // REGEX: Phone number masking
-  const phoneRegex = /\b(01[016789]|02|0[3-9][0-9])-?([0-9]{3,4})-?([0-9]{4})\b/g;
-  maskedText = maskedText.replace(phoneRegex, '$1-****-****');
+  // NOTE: REGEX: Phone number masking
+  // NOTE: Supports spaces, dots, hyphens (Removed \b for Korean context boundary support)
+  const phoneRegex = /(^|[^0-9])(01[016789]|02|0[3-9][0-9])\s*[-.]?\s*([0-9]{3,4})\s*[-.]?\s*([0-9]{4})([^0-9]|$)/g;
+  maskedText = maskedText.replace(phoneRegex, '$1$2-****-****$5');
 
-  // REGEX: Resident Registration Number (RRN) masking
-  const rrnRegex = /\b([0-9]{6})-?([1-8][0-9]{6})\b/g;
-  maskedText = maskedText.replace(rrnRegex, '******-*******');
+  // NOTE: REGEX: Resident Registration Number (RRN) masking
+  // NOTE: Supports spaces, hyphens
+  const rrnRegex = /(^|[^0-9])([0-9]{6})\s*[-]*\s*([1-8][0-9]{6})([^0-9]|$)/g;
+  maskedText = maskedText.replace(rrnRegex, '$1******-*******$4');
 
-  // REGEX: Email masking
+  // NOTE: REGEX: Email masking
   const emailRegex = /([a-zA-Z0-9._-]+)@([a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/g;
   maskedText = maskedText.replace(emailRegex, (_match, p1, p2) => {
     if (p1.length <= 2) return `***@${p2}`;

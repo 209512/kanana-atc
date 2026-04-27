@@ -1,4 +1,3 @@
-// src/components/agent/AgentIdentity.tsx
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Check, X } from 'lucide-react';
 import clsx from 'clsx';

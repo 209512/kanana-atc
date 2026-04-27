@@ -1,4 +1,3 @@
-// src/components/common/AIControlGroup.tsx
 import React from 'react';
 import clsx from 'clsx';
 import { Brain, Bot } from 'lucide-react';
@@ -33,6 +32,7 @@ export const AIControlGroup = ({ variant = 'tactical', isCompact = false }: AICo
     };
 
     const handleToggleAutoMode = () => {
+        playClick?.();
         if (!isAiMode) {
             const kananaKey = sessionStorage.getItem('KANANA_API_KEY') || localStorage.getItem('KANANA_API_KEY');
             if (!kananaKey) {
@@ -41,7 +41,7 @@ export const AIControlGroup = ({ variant = 'tactical', isCompact = false }: AICo
             }
             toggleAiMode(true);
         }
-        toggleAiAutoMode();
+        toggleAiAutoMode(!isAiAutoMode);
     };
 
     const isSidebar = variant === 'sidebar';

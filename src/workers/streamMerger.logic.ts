@@ -1,4 +1,3 @@
-// src/workers/streamMerger.logic.ts
 import { Agent, ATCState, LogEntry, AIProposal } from '../contexts/atcTypes';
 
 export interface BufferedAgent {
@@ -58,23 +57,20 @@ export const mergeAgentsWorker = (
     const existingAgent = prevAgents.find(a => a.id === originalId);
     
     if (existingAgent) {
-      const isPosSame = existingAgent.index === agent.index;
-      
-      const parseMetric = (val: unknown) => parseFloat(String(val || '0').replace(/[^0-9.]/g, ''));
-      
-      const isStatusSame = existingAgent.status === String(agent.status || 'idle').toLowerCase() &&
-                           existingAgent.isPaused === !!finalIsPaused &&
-                           existingAgent.priority === !!finalPriority &&
-                           existingAgent.displayName === finalDisplayName &&
-                           parseMetric((existingAgent.metrics as any)?.load) === parseMetric((agent.metrics as any)?.load) &&
-                           parseMetric((existingAgent.metrics as any)?.lat) === parseMetric((agent.metrics as any)?.lat) &&
-                           parseMetric((existingAgent.metrics as any)?.tot) === parseMetric((agent.metrics as any)?.tot);
-                           
-      if (isPosSame && isStatusSame) {
-        // 주요 상태와 위치가 동일하다면, activeTime의 미세한 지연(Latency) 차이로 인한 
-        // 불필요한 메모리 할당(Allocate)과 리렌더링 폭주를 막기 위해 기존 객체 참조를 유지 (Referential Equality)
-        return existingAgent; 
-      }
+      // NOTE: Ensure dynamic fields are updated during merge
+      return {
+        ...existingAgent,
+        ...agent,
+        id: originalId,
+        uuid: originalId,
+        displayName: finalDisplayName,
+        displayId: agent.displayId || finalDisplayName,
+        isPaused: !!finalIsPaused,
+        priority: !!finalPriority,
+        status: String(agent.status || 'idle').toLowerCase() as Agent['status'],
+        activeTime: agent.activeTime || existingAgent.activeTime || 0,
+        index: agent.index !== undefined ? agent.index : existingAgent.index,
+      } as Agent;
     }
 
     return {
@@ -111,7 +107,7 @@ export const mergeStateWorker = (
   const uniqueMap = new Map<string, LogEntry>();
   
   (prevState.logs || []).forEach(l => {
-    if (String(l.id).startsWith('ui-')) uniqueMap.set(l.id, l);
+    uniqueMap.set(l.id, l);
   });
   
   serverLogs.forEach((l: unknown) => {
@@ -119,7 +115,7 @@ export const mergeStateWorker = (
     if (log && log.id) uniqueMap.set(log.id, log); 
     });
 
-  // Merge logs and maintain up to 1000 items (matching ATC_CONFIG.LOGS.MAX_DISPLAY)
+  // NOTE: Merge logs and maintain up to 1000 items (matching ATC_CONFIG.LOGS.MAX_DISPLAY)
   const sortedLogs = Array.from(uniqueMap.values())
     .sort((a: LogEntry, b: LogEntry) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0))
     .slice(-1000);

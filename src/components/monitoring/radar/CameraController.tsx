@@ -1,4 +1,3 @@
-// src/components/monitoring/radar/CameraController.tsx
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useRef, useEffect } from 'react';
@@ -29,7 +28,7 @@ export const CameraController = () => {
         const handleStart = () => {
             isUserInteracting.current = true;
             isAutoZooming.current = false;
-            // 선택된 기체가 없을 때(배경) 사용자가 마우스를 조작하면 중앙 복귀(Tracking)를 멈춤 -> 자유로운 Pan 허용
+            
             if (!selectedAgentId) {
                 isTracking.current = false;
             }
@@ -45,7 +44,7 @@ export const CameraController = () => {
     }, [controls, selectedAgentId]);
 
     useEffect(() => {
-        // 기체 선택 상태가 변경되면 다시 트래킹 활성화 (기체로 이동하거나 중앙으로 복귀)
+        
         isTracking.current = true;
         if (selectedAgentId) {
             if (selectedAgentId !== lastSelectedId.current) {
