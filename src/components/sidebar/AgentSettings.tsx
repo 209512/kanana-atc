@@ -1,13 +1,21 @@
-// src/components/sidebar/AgentSettings.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import { X, Save, Key, Cpu, MessageSquare, Settings, ChevronDown, Type, Brain } from 'lucide-react';
 import clsx from 'clsx';
 import { useAgentSettings } from '@/hooks/agent/useAgentSettings';
 import { useUIStore } from '@/store/useUIStore';
+import { updateAgentKeyAsync, hasAgentKeyAsync } from '@/utils/secureStorage';
+
+const modelsByProvider: Record<string, string[]> = {
+    gemini: ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'], // NOTE: Added Gemini 2.x models for new API keys
+    openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+    anthropic: ['claude-3-5-sonnet-20240620', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
+    mock: ['mock-model']
+};
 
 export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [isAgentOpen, setIsAgentOpen] = useState(false);
     const [isProviderOpen, setIsProviderOpen] = useState(false);
+    const [isModelOpen, setIsModelOpen] = useState(false);
     const [agentApiKey, setAgentApiKey] = useState("");
     const modalRef = useRef<HTMLDivElement>(null);
     const { terminalFontSize, setTerminalFontSize, openKananaKeyModal } = useUIStore();
@@ -16,7 +24,7 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         agents, isDark, areTooltipsEnabled, setAreTooltipsEnabled,
         selectedAgent, setSelectedAgent, provider, setProvider,
         model, setModel, systemPrompt, setSystemPrompt,
-        isLoading, handleSubmit
+        isLoading, handleSubmit, handleSave
     } = useAgentSettings(onClose);
 
     const providers = [
@@ -27,13 +35,23 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     ];
  
     useEffect(() => {
-        try {
-            const keys = JSON.parse(localStorage.getItem('AGENT_API_KEYS') || '{}');
-            setAgentApiKey(keys[selectedAgent]?.[provider] || "");
-        } catch {
-            setAgentApiKey("");
-        }
+        const loadKey = async () => {
+            try {
+                const hasKey = await hasAgentKeyAsync(selectedAgent, provider);
+                setAgentApiKey(hasKey ? "••••••••••••••••" : "");
+            } catch {
+                setAgentApiKey("");
+            }
+        };
+        loadKey();
     }, [selectedAgent, provider]);
+
+    useEffect(() => {
+        const availableModels = modelsByProvider[provider] || [];
+        if (availableModels.length > 0 && !availableModels.includes(model)) {
+            setModel(availableModels[0]);
+        }
+    }, [provider, model, setModel]);
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
@@ -44,6 +62,7 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 <div className={clsx("flex justify-between items-center border-b pb-3 mb-5", isDark ? "border-white/10" : "border-slate-200")}>
                     <h2 className="flex items-center gap-2 font-mono font-bold tracking-widest uppercase text-xs">
                         <Settings size={14} className="text-blue-500" /> SYSTEM_CONFIG
+                        {/* TODO: [i18n] Integrate next-i18next translation keys here once Korean auto-translation UX is refined */}
                     </h2>
                     <button onClick={onClose} className="opacity-50 hover:opacity-100 p-1 transition-opacity"><X size={18} /></button>
                 </div>
@@ -94,8 +113,8 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                             type="button"
                             onClick={(e) => {
                                 e.preventDefault();
-                                onClose(); // 설정 모달을 닫고
-                                openKananaKeyModal(); // 카나나 키 모달을 엽니다.
+                                onClose(); 
+                                openKananaKeyModal(); 
                             }}
                             className={clsx(
                                 "px-3 py-1.5 text-[9px] font-bold rounded transition-all shadow-sm",
@@ -110,7 +129,7 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                         {/* Agent Selector */}
                         <div className="space-y-1">
                             <label className="text-[9px] font-bold uppercase opacity-50">Target Agent</label>
-                            <button type="button" onClick={() => { setIsAgentOpen(!isAgentOpen); setIsProviderOpen(false); }} 
+                            <button type="button" onClick={() => { setIsAgentOpen(!isAgentOpen); setIsProviderOpen(false); setIsModelOpen(false); }} 
                                 className={clsx("w-full h-9 px-3 rounded border text-[11px] flex items-center justify-between", isDark ? "bg-black border-gray-700" : "bg-white border-slate-300")}>
                                 <span className="truncate">{agents.find(a => a.id === selectedAgent)?.displayId || "Select"}</span>
                                 <ChevronDown size={12} className={clsx("transition-transform", isAgentOpen && "rotate-180")} />
@@ -118,7 +137,7 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                             {isAgentOpen && (
                                 <div className={clsx("absolute z-[110] w-[calc(50%-6px)] mt-1 border rounded shadow-2xl max-h-40 overflow-y-auto custom-scrollbar", isDark ? "bg-gray-900 border-gray-700" : "bg-white border-slate-200")}>
                                     {agents.map((a) => (
-                                        <div key={a.id} onClick={() => { setSelectedAgent(a.id); setIsAgentOpen(false); }}
+                                        <div key={a.id} onClick={() => { setSelectedAgent(a.id); setIsAgentOpen(false); setIsModelOpen(false); }}
                                             className="p-2 hover:bg-blue-600 hover:text-white cursor-pointer transition-colors border-b border-white/5 last:border-0 text-[11px]">
                                             {a.displayId || a.id}
                                         </div>
@@ -130,7 +149,7 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                         {/* Provider Selector */}
                         <div className="space-y-1">
                             <label className="text-[9px] font-bold uppercase opacity-50">Provider</label>
-                            <button type="button" onClick={() => { setIsProviderOpen(!isProviderOpen); setIsAgentOpen(false); }}
+                            <button type="button" onClick={() => { setIsProviderOpen(!isProviderOpen); setIsAgentOpen(false); setIsModelOpen(false); }}
                                 className={clsx("w-full h-9 px-3 rounded border text-[11px] flex items-center justify-between", isDark ? "bg-black border-gray-700" : "bg-white border-slate-300")}>
                                 <span className="truncate">{providers.find(p => p.id === provider)?.name || "Select"}</span>
                                 <ChevronDown size={12} className={clsx("transition-transform", isProviderOpen && "rotate-180")} />
@@ -138,7 +157,7 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                             {isProviderOpen && (
                                 <div className={clsx("absolute z-[110] right-0 w-[calc(50%-6px)] mt-1 border rounded shadow-2xl max-h-40 overflow-y-auto custom-scrollbar", isDark ? "bg-gray-900 border-gray-700" : "bg-white border-slate-200")}>
                                     {providers.map((p) => (
-                                        <div key={p.id} onClick={() => { setProvider(p.id); setIsProviderOpen(false); }}
+                                        <div key={p.id} onClick={() => { setProvider(p.id); setIsProviderOpen(false); setIsModelOpen(false); }}
                                             className="p-2 hover:bg-blue-600 hover:text-white cursor-pointer transition-colors border-b border-white/5 last:border-0 text-[11px]">
                                             {p.name}
                                         </div>
@@ -154,23 +173,33 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                         <input type="password" 
                             placeholder={`Enter ${providers.find(p => p.id === provider)?.name || 'Provider'} API Key`}
                             value={agentApiKey}
-                            onChange={(e) => {
+                            onChange={async (e) => {
                                 setAgentApiKey(e.target.value);
                                 try {
-                                    const keys = JSON.parse(localStorage.getItem('AGENT_API_KEYS') || '{}');
-                                    if (!keys[selectedAgent]) keys[selectedAgent] = {};
-                                    keys[selectedAgent][provider] = e.target.value;
-                                    localStorage.setItem('AGENT_API_KEYS', JSON.stringify(keys));
+                                    await updateAgentKeyAsync(selectedAgent, provider, e.target.value);
                                 } catch {}
                             }}
                             className={clsx("w-full h-9 px-3 rounded border text-[11px] outline-none focus:border-blue-500", isDark ? "bg-black border-gray-700" : "bg-white border-slate-300")} />
                     </div>
 
                     <div className="space-y-3">
-                        <div className="space-y-1">
+                        <div className="space-y-1 relative">
                             <label className="text-[9px] font-bold uppercase opacity-50 flex items-center gap-1"><Cpu size={10} /> MODEL_OVERRIDE</label>
-                            <input type="text" value={model} onChange={e => setModel(e.target.value)} placeholder="e.g. gpt-4-turbo"
-                                className={clsx("w-full h-9 px-3 rounded border text-[11px] outline-none focus:border-blue-500", isDark ? "bg-black border-gray-700" : "bg-white border-slate-300")} />
+                            <button type="button" onClick={() => { setIsModelOpen(!isModelOpen); setIsProviderOpen(false); setIsAgentOpen(false); }}
+                                className={clsx("w-full h-9 px-3 rounded border text-[11px] flex items-center justify-between", isDark ? "bg-black border-gray-700" : "bg-white border-slate-300")}>
+                                <span className="truncate">{model || "Select Model"}</span>
+                                <ChevronDown size={12} className={clsx("transition-transform", isModelOpen && "rotate-180")} />
+                            </button>
+                            {isModelOpen && (
+                                <div className={clsx("absolute z-[110] w-full mt-1 border rounded shadow-2xl max-h-40 overflow-y-auto custom-scrollbar", isDark ? "bg-gray-900 border-gray-700" : "bg-white border-slate-200")}>
+                                    {(modelsByProvider[provider] || []).map((m) => (
+                                        <div key={m} onClick={() => { setModel(m); setIsModelOpen(false); }}
+                                            className="p-2 hover:bg-blue-600 hover:text-white cursor-pointer transition-colors border-b border-white/5 last:border-0 text-[11px]">
+                                            {m}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                         <div className="space-y-1">
                             <label className="text-[9px] font-bold uppercase opacity-50 flex items-center gap-1"><MessageSquare size={10} /> SYSTEM_PERSONA</label>
@@ -179,11 +208,19 @@ export const AgentSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                         </div>
                     </div>
                     
-                    <button type="submit" disabled={isLoading}
-                        className={clsx("w-full h-10 mt-2 font-bold rounded flex items-center justify-center gap-2 transition-all uppercase text-[11px] tracking-widest",
-                            isLoading ? "bg-gray-700 opacity-50 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg active:scale-95")}>
-                        <Save size={14} /> {isLoading ? 'UPDATING...' : 'DEPLOY_CONFIG'}
-                    </button>
+                    <div className="flex gap-2 mt-2">
+                        <button type="button" disabled={isLoading}
+                            onClick={() => handleSave(false)}
+                            className={clsx("flex-1 h-10 font-bold rounded flex items-center justify-center gap-2 transition-all uppercase text-[11px] tracking-widest",
+                                isLoading ? "bg-gray-700 opacity-50 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg active:scale-95")}>
+                            <Save size={14} /> {isLoading ? 'SAVING...' : 'SAVE_ONLY'}
+                        </button>
+                        <button type="submit" disabled={isLoading}
+                            className={clsx("flex-1 h-10 font-bold rounded flex items-center justify-center gap-2 transition-all uppercase text-[11px] tracking-widest",
+                                isLoading ? "bg-gray-700 opacity-50 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg active:scale-95")}>
+                            <Save size={14} /> {isLoading ? 'UPDATING...' : 'DEPLOY_CONFIG'}
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>

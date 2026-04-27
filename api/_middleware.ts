@@ -1,4 +1,3 @@
-// api/_middleware.ts
 import { getAllowedOrigins, getClientIp, isIpBanned, verifyAuthToken, checkRateLimit } from './_utils';
 import { logger } from './_logger';
 
@@ -27,8 +26,11 @@ export async function withApiMiddleware(
   const origin = req.headers.get('origin') || "";
   const allowedOrigins = getAllowedOrigins();
   
-  // allow no origin only in dev
-  const isAllowed = (process.env.NODE_ENV !== 'production' && !origin) || allowedOrigins.includes(origin);
+  const isDev = process.env.NODE_ENV !== 'production';
+  const isLocalhost = origin && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'));
+  
+  // NOTE: Allow empty origin for S2S/mobile
+  const isAllowed = !origin || allowedOrigins.includes(origin) || isDev || isLocalhost;
 
   const corsHeaders = new Headers({
     "Content-Type": "application/json"
@@ -37,7 +39,7 @@ export async function withApiMiddleware(
     corsHeaders.set("Access-Control-Allow-Origin", origin);
   }
 
-  // 1. CORS Preflight
+  // NOTE: CORS Preflight
   if (req.method === "OPTIONS") {
     const responseHeaders = new Headers({
       "Access-Control-Allow-Methods": `${options.allowedMethods.join(', ')}, OPTIONS`,
@@ -49,19 +51,19 @@ export async function withApiMiddleware(
     return new Response(null, { status: 204, headers: responseHeaders });
   }
 
-  // 2. CORS 검증
+  // NOTE: CORS Validation
   if (!isAllowed) {
     return new Response(JSON.stringify({ error: "FORBIDDEN_ORIGIN" }), { status: 403, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // 3. HTTP Method 검증
+  // NOTE: HTTP Method Validation
   if (!options.allowedMethods.includes(req.method)) {
     return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: corsHeaders });
   }
 
   const clientIp = getClientIp(req);
 
-  // 4. IP 차단 확인
+  // NOTE: IP Ban Check
   if (await isIpBanned(clientIp)) {
     return new Response(JSON.stringify({ 
       error: "FORBIDDEN_IP", 
@@ -72,7 +74,7 @@ export async function withApiMiddleware(
   let rateLimitIdentifier = options.rateLimitKeyPrefix ? `${options.rateLimitKeyPrefix}:${clientIp}` : clientIp;
   let authPayload: { jti?: string, [key: string]: unknown } | undefined;
 
-  // 5. 인증 (JWT/Signed Token 검증)
+  // NOTE: Authentication Check
   if (options.requireAuth) {
     if (!process.env.JWT_SECRET) {
       logger.error("[MIDDLEWARE_ERR] Server configuration error: JWT_SECRET missing");
@@ -87,14 +89,11 @@ export async function withApiMiddleware(
       }), { status: 401, headers: corsHeaders });
     }
     
-    // 토큰 페이로드(JTI) 기반 Rate Limiting (IP 우회 방어)
     authPayload = authResult.payload as { jti?: string, [key: string]: unknown };
-    if (authPayload?.jti) {
-      rateLimitIdentifier = `token:${authPayload.jti}`;
-    }
+    rateLimitIdentifier = `ip:${clientIp}`;
   }
 
-  // 6. Rate Limiting 검사
+  // NOTE: Rate Limiting Check
   if (!(await checkRateLimit(rateLimitIdentifier, options.rateLimitMaxRequests, clientIp))) {
     return new Response(JSON.stringify({ 
       error: "TOO_MANY_REQUESTS", 
@@ -102,7 +101,7 @@ export async function withApiMiddleware(
     }), { status: 429, headers: corsHeaders });
   }
 
-  // 7. Handler 실행
+  // NOTE: Execute Handler
   try {
     const context: MiddlewareContext = {
       origin,
@@ -114,7 +113,7 @@ export async function withApiMiddleware(
     };
     const response = await handler(req, context);
     
-    // 응답 헤더에 CORS 설정 추가
+    // NOTE: Append CORS headers to response
     if (isAllowed && origin) {
       response.headers.set("Access-Control-Allow-Origin", origin);
     }
