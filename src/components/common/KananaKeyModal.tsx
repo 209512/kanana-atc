@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { Brain, X } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
-import { useATCStore } from '@/store/useATCStore';
+import { encryptDataAsync } from '@/utils/secureStorage';
 
 export const KananaKeyModal = () => {
   const isDark = useUIStore(s => s.isDark);
@@ -13,16 +13,21 @@ export const KananaKeyModal = () => {
   const [remember, setRemember] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) return;
-    const localKey = localStorage.getItem('KANANA_API_KEY');
-    const sessionKey = sessionStorage.getItem('KANANA_API_KEY');
-    if (localKey) {
-      setRemember(true);
-      setValue(localKey);
-      return;
+    if (isOpen) {
+      const localKeyRaw = window.localStorage.getItem('KANANA_API_KEY');
+      const sessionKeyRaw = window.sessionStorage.getItem('KANANA_API_KEY');
+      
+      if (localKeyRaw) {
+          setValue("••••••••••••••••");
+          setRemember(true);
+      } else if (sessionKeyRaw) {
+          setValue("••••••••••••••••");
+          setRemember(false);
+      } else {
+          setValue("");
+          setRemember(false);
+      }
     }
-    setRemember(false);
-    setValue(sessionKey || '');
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -82,9 +87,6 @@ export const KananaKeyModal = () => {
             onClick={() => {
               sessionStorage.removeItem('KANANA_API_KEY');
               localStorage.removeItem('KANANA_API_KEY');
-              // Action: Reset quota to default on key removal
-              const defaultQuota = Number(import.meta.env?.VITE_AI_QUOTA) || 20;
-              useATCStore.getState().setAiQuota(defaultQuota);
               close();
             }}
             className={clsx(
@@ -95,19 +97,17 @@ export const KananaKeyModal = () => {
             CLEAR
           </button>
           <button
-            onClick={() => {
+            onClick={async () => {
               const trimmed = value.trim();
               if (trimmed) {
+                const encodedKey = await encryptDataAsync(trimmed);
                 if (remember) {
-                  localStorage.setItem('KANANA_API_KEY', trimmed);
+                  localStorage.setItem('KANANA_API_KEY', encodedKey);
                   sessionStorage.removeItem('KANANA_API_KEY');
                 } else {
-                  sessionStorage.setItem('KANANA_API_KEY', trimmed);
+                  sessionStorage.setItem('KANANA_API_KEY', encodedKey);
                   localStorage.removeItem('KANANA_API_KEY');
                 }
-                // Action: Reset quota to default on new key insertion
-                const defaultQuota = Number(import.meta.env?.VITE_AI_QUOTA) || 20;
-                useATCStore.getState().setAiQuota(defaultQuota);
               }
               close();
             }}
