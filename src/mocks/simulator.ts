@@ -33,7 +33,7 @@ class ATCSimulator {
     logs: [] as any[],
     activeAgentCount: 2,
     overrideSignal: false,
-    fencingToken: Number(import.meta.env?.VITE_INITIAL_FENCING_TOKEN) || 1000,
+    fencingToken: Number(import.meta.env.VITE_INITIAL_FENCING_TOKEN) || 1000,
     latency: 12,
     trafficIntensity: 2,
   };
@@ -70,7 +70,7 @@ class ATCSimulator {
 
   createAgent(id: string, index?: number): MockAgent {
     const finalIndex = index ?? this.getNextAvailableIndex();
-    const isGemini = finalIndex === 1 || import.meta.env?.VITE_DEFAULT_AGENT_PROVIDER === 'gemini';
+    const isGemini = finalIndex === 1 || import.meta.env.VITE_DEFAULT_AGENT_PROVIDER === 'gemini';
     return {
       uuid: id,
       id: id,
@@ -187,7 +187,7 @@ class ATCSimulator {
             const currentRiskLevel = (uiState.state as any).risk_level || 0;
             
             const externalData: Record<string, string> = {
-              location: import.meta.env?.VITE_ATC_REGION || "Seoul",
+              location: import.meta.env.VITE_ATC_REGION || "Seoul",
               weather: Math.random() > 0.5 ? "Heavy Rain & Strong Winds" : "Dry & Clear",
               news: Math.random() > 0.5 ? "Urban Fire Detected" : "Marine SOS Signal Detected",
               risk_level: String(currentRiskLevel),

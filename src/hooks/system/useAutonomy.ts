@@ -66,7 +66,7 @@ export const useAutonomy = (state: ATCState, agents: Agent[], addLog: any) => {
 
   // NOTE: Sync riskScore with global store (MSW mode)
   useEffect(() => {
-    if (import.meta.env?.VITE_USE_MSW === 'true') {
+    if (import.meta.env.VITE_USE_MSW === 'true') {
       const msw = (window as any).msw;
       if (msw && msw.worker) {
         const newRiskLevel = Math.round(riskScore / 10);

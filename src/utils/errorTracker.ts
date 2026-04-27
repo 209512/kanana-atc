@@ -52,7 +52,7 @@ class ErrorTracker {
 
   private async reportToBackend(error: Error, context?: ErrorContext) {
     // NOTE: If we have an API endpoint configured for logging, send it there
-    const logEndpoint = import.meta.env?.VITE_ERROR_LOG_ENDPOINT;
+    const logEndpoint = import.meta.env.VITE_ERROR_LOG_ENDPOINT;
     if (!logEndpoint) return;
 
     try {

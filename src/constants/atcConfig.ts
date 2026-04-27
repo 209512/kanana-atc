@@ -3,7 +3,7 @@ const getEnvOrLocal = (key: string, fallback: number) => {
     const local = window.localStorage.getItem(key);
     if (local !== null && !isNaN(Number(local))) return Number(local);
   }
-  return Number((import.meta.env as Record<string, string>)?.[key]) || fallback;
+  return Number((import.meta.env as Record<string, string>)[key]) || fallback;
 };
 
 export const ATC_CONFIG = {
@@ -40,7 +40,7 @@ export const ATC_CONFIG = {
   },
   
   AI: {
-    DEFAULT_QUOTA: Number(import.meta.env?.VITE_AI_QUOTA) || 20,
+    DEFAULT_QUOTA: Number(import.meta.env.VITE_AI_QUOTA) || 20,
     THINKING_AGENT: 'AGENT-THINKING',
     NETWORK_AGENT: "NETWORK",
     SYSTEM_AGENT: 'AGENT-SYSTEM',
@@ -114,9 +114,9 @@ export const ATC_CONFIG = {
 
   
   LEVELS: {
-    NORMAL: Number(import.meta.env?.VITE_LEVEL_NORMAL) || 30,
-    CAUTION: Number(import.meta.env?.VITE_LEVEL_CAUTION) || 70,
-    EMERGENCY: Number(import.meta.env?.VITE_LEVEL_EMERGENCY) || 95,
+    NORMAL: Number(import.meta.env.VITE_LEVEL_NORMAL) || 30,
+    CAUTION: Number(import.meta.env.VITE_LEVEL_CAUTION) || 70,
+    EMERGENCY: Number(import.meta.env.VITE_LEVEL_EMERGENCY) || 95,
   }
 } as const;
 

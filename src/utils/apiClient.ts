@@ -6,7 +6,7 @@ import { queryKeys } from '@/constants/queryKeys';
 import { encryptDataAsync, injectSecureHeaders } from '@/utils/secureStorage';
 import { idbService } from './idbService';
 
-const BASE_URL = import.meta.env?.VITE_API_BASE_URL || '/api';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // NOTE: Background Sync Manager
 export const processOfflineQueue = async () => {
@@ -68,7 +68,7 @@ export const initAuth = async (): Promise<string | null> => {
     queryKey: queryKeys.auth(),
     queryFn: async () => {
       try {
-        const baseUrlStr = import.meta.env?.VITE_API_BASE_URL || BASE_URL;
+        const baseUrlStr = import.meta.env.VITE_API_BASE_URL || BASE_URL;
         const safeBase = getSafeBaseUrl(baseUrlStr);
         const initUrl = `${safeBase}/init`;
         const res = await fetch(initUrl);
@@ -102,13 +102,13 @@ export const initAuth = async (): Promise<string | null> => {
 
 export const request = async (url: string, options: RequestOptions = {}) => {
   const { 
-    timeout = Number(import.meta.env?.VITE_API_TIMEOUT) || ATC_CONFIG.SIMULATOR.API_TIMEOUT,
-    retries = Number(import.meta.env?.VITE_API_RETRIES) || ATC_CONFIG.SIMULATOR.API_RETRIES, 
-    backoff = Number(import.meta.env?.VITE_API_BACKOFF) || ATC_CONFIG.SIMULATOR.API_BACKOFF, 
+    timeout = Number(import.meta.env.VITE_API_TIMEOUT) || ATC_CONFIG.SIMULATOR.API_TIMEOUT,
+    retries = Number(import.meta.env.VITE_API_RETRIES) || ATC_CONFIG.SIMULATOR.API_RETRIES, 
+    backoff = Number(import.meta.env.VITE_API_BACKOFF) || ATC_CONFIG.SIMULATOR.API_BACKOFF, 
     ...fetchOptions 
   } = options;
 
-  const baseUrlStr = import.meta.env?.VITE_API_BASE_URL || BASE_URL;
+  const baseUrlStr = import.meta.env.VITE_API_BASE_URL || BASE_URL;
   const isExternal = url.startsWith('/proxy') || url.startsWith('http') || url.startsWith(baseUrlStr);
   const formattedUrl = url.startsWith('/') ? url : '/' + url;
   

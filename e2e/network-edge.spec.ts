@@ -138,7 +138,7 @@ test.describe('Network Edge & Error Handling E2E Tests', () => {
     });
 
     expect(proposalData.action).toBe('PAUSE');
-    expect(proposalData.targetId).toBe('AGENT-1');
+    expect(proposalData.targetId).toBe('1');
   });
 
 });

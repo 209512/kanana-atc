@@ -23,7 +23,7 @@ export const atcApi = {
 
     // NOTE: Environment-aware Audio Fallback (PCM on local, Web API on Vercel)
     const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    const envAudio = import.meta.env?.VITE_USE_KANANA_AUDIO;
+    const envAudio = import.meta.env.VITE_USE_KANANA_AUDIO;
     const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
     
     // NOTE: Force TTS fallback on Vercel to prevent 50MB payload limits
@@ -38,7 +38,7 @@ export const atcApi = {
     };
 
     const requestBody: Record<string, unknown> = { 
-      model: import.meta.env?.VITE_KANANA_MODEL || "kanana-o", 
+      model: import.meta.env.VITE_KANANA_MODEL || "kanana-o", 
       messages: finalMessages, 
       stream: isStream,
       async: true, 
@@ -97,8 +97,8 @@ export const atcApi = {
           worker.terminate();
         };
 
-        const baseUrl = import.meta.env?.VITE_API_BASE_URL || '/api';
-        let apiKey = import.meta.env?.VITE_KANANA_API_KEY || "";
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+        let apiKey = import.meta.env.VITE_KANANA_API_KEY || "";
         if (!apiKey && typeof window !== 'undefined' && window.sessionStorage) {
             apiKey = window.sessionStorage.getItem('KANANA_API_KEY') || "";
         }

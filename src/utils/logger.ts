@@ -1,6 +1,6 @@
 import { color } from './doNotUseColor';
 
-const isProduction = import.meta.env?.PROD || process.env.NODE_ENV === 'production';
+const isProduction = import.meta.env.PROD || process.env.NODE_ENV === 'production';
 
 export const logger = {
   log: (...args: unknown[]) => {
