@@ -1,4 +1,3 @@
-// src/utils/audioService.ts
 import { logger } from './logger';
 
 class AudioService {
@@ -33,7 +32,7 @@ class AudioService {
             window.removeEventListener('click', initAudio);
           }).catch((err) => {
             logger.error("AudioContext resume failed:", err);
-            // Failed to resume, but we should remove the listener to avoid infinite errors on each click
+            // NOTE: Failed to resume, but we should remove the listener to avoid infinite errors on each click
             window.removeEventListener('click', initAudio);
           });
         } else {
@@ -72,12 +71,18 @@ class AudioService {
       if (!this.isActivated) return resolve();
       const ctx = this.getContext();
       
+      // NOTE: Resolve immediately if audio context is suspended to prevent deadlock
+      if (ctx.state === 'suspended') {
+          logger.warn("AudioContext is suspended. Skipping PCM playback to prevent queue deadlock.");
+          return resolve();
+      }
+      
       try {
         const binaryString = window.atob(base64Data);
         const len = binaryString.length;
         const bytes = new Int16Array(len / 2);
         
-        // COMPATIBILITY: Parse 16-bit PCM as little-endian safely via DataView
+        // NOTE: COMPATIBILITY: Parse 16-bit PCM as little-endian safely via DataView
         const buffer = new ArrayBuffer(len);
         const view = new DataView(buffer);
         for (let i = 0; i < len; i++) {
@@ -168,16 +173,45 @@ class AudioService {
     }
   }
   
-  // QUEUE: Push Base64 PCM data to audio queue (Kanana-O 24kHz standard)
+  // NOTE: MEMORY: Explicitly close AudioContext to prevent memory leaks during long sessions
+  public async close() {
+    if (this.ctx && this.ctx.state !== 'closed') {
+      try {
+        await this.ctx.close();
+      } catch (err) {
+        logger.error("Failed to close AudioContext:", err);
+      } finally {
+        this.ctx = null;
+        this.isActivated = false;
+        this.audioQueue = [];
+        this.setPlayingState(false);
+      }
+    }
+  }
+
+  // NOTE: QUEUE: Push Base64 PCM data to audio queue (Kanana-O 24kHz standard)
   async playPCM(base64Data: string, sampleRate: number = 24000) {
     this.audioQueue.push({ type: 'pcm', data: base64Data, sampleRate });
     this.processQueue();
   }
 
-  // FALLBACK: Queue Web Speech API TTS for Lite Version
+  // NOTE: FALLBACK: Queue Web Speech API TTS for Lite Version
   playTTS(text: string, lang: string = 'ko-KR') {
     this.audioQueue.push({ type: 'tts', data: text, lang });
     this.processQueue();
+  }
+
+  // NOTE: STOP: Force stop all currently playing audio and clear queue
+  stopAll() {
+    this.audioQueue = [];
+    if (this.ctx && this.ctx.state === 'running') {
+      this.ctx.suspend().then(() => this.ctx?.resume());
+      this.nextStartTime = this.ctx.currentTime;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    this.setPlayingState(false);
   }
 }
 

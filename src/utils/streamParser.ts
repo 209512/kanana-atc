@@ -1,4 +1,3 @@
-// src/utils/streamParser.ts
 
 
 export const parseStreamChunk = (
@@ -27,24 +26,24 @@ export const parseStreamChunk = (
         const choice = data.choices?.[0];
         
         if (choice) {
-          const delta = choice.delta || choice.message;
+          const delta = choice.delta || choice.message || choice;
           const content = delta?.content || "";
           
           let audioData = null;
           if (delta?.audio) {
-            audioData = delta.audio.data || delta.audio.audio || delta.audio;
+            audioData = delta.audio.data || delta.audio.audio || (typeof delta.audio === 'string' ? delta.audio : null);
           }
           
           if (content || audioData) {
             onChunk(content, audioData);
           }
         }
-        currentBuffer = currentBuffer.slice(newlineIndex + 1);
       } catch (e) {
-        // If JSON.parse fails, the chunk might be incomplete due to network fragmentation.
-        // Break the loop and keep the currentBuffer to be concatenated with the next chunk.
-        break;
+        // NOTE: If JSON.parse fails on a complete line (ended with newline), the payload is malformed
+        // NOTE: Skip corrupted line to prevent infinite loop
+        console.warn('Failed to parse SSE data chunk', e);
       }
+      currentBuffer = currentBuffer.slice(newlineIndex + 1);
     } else {
       currentBuffer = currentBuffer.slice(newlineIndex + 1);
     }
