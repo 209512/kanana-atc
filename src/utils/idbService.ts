@@ -3,13 +3,14 @@ import { logger } from './logger';
 
 const DB_NAME = 'KananaATC_DB';
 const STORE_NAME = 'audit_logs';
-const VERSION = 1;
+const QUEUE_STORE = 'offline_queue';
+const CRYPTO_STORE = 'crypto_store';
+const VERSION = 3;
 
 class IndexedDBService {
   private dbPromise: Promise<IDBPDatabase | null> | null = null;
 
   constructor() {
-    // Only initialize if indexedDB is available (i.e. in a browser environment)
     if (typeof indexedDB !== 'undefined') {
       this.init();
     }
@@ -22,10 +23,17 @@ class IndexedDBService {
     
     if (!this.dbPromise) {
       this.dbPromise = openDB(DB_NAME, VERSION, {
-        upgrade(db) {
-          if (!db.objectStoreNames.contains(STORE_NAME)) {
+        upgrade(db, oldVersion) {
+          if (oldVersion < 1 || !db.objectStoreNames.contains(STORE_NAME)) {
             const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
             store.createIndex('timestamp', 'timestamp');
+          }
+          if (oldVersion < 2 || !db.objectStoreNames.contains(QUEUE_STORE)) {
+            const queue = db.createObjectStore(QUEUE_STORE, { keyPath: 'id', autoIncrement: true });
+            queue.createIndex('timestamp', 'timestamp');
+          }
+          if (oldVersion < 3 || !db.objectStoreNames.contains(CRYPTO_STORE)) {
+            db.createObjectStore(CRYPTO_STORE);
           }
         },
       }).catch(err => {
@@ -35,6 +43,45 @@ class IndexedDBService {
     }
     return this.dbPromise;
   }
+
+  // NOTE: Offline Sync Queue Methods
+  async addOfflineRequest(requestData: { url: string, method: string, headers: any, body: any }): Promise<void> {
+    try {
+      const db = await this.init();
+      if (!db) return;
+      await db.add(QUEUE_STORE, {
+        ...requestData,
+        timestamp: Date.now(),
+      });
+      logger.log('[OfflineSync] Request queued for later sync');
+    } catch (error) {
+      logger.error('[OfflineSync] Failed to queue request:', error);
+    }
+  }
+
+  async getOfflineRequests(): Promise<any[]> {
+    try {
+      const db = await this.init();
+      if (!db) return [];
+      const tx = db.transaction(QUEUE_STORE, 'readonly');
+      return await tx.objectStore(QUEUE_STORE).getAll();
+    } catch (error) {
+      logger.error('[OfflineSync] Failed to get offline requests:', error);
+      return [];
+    }
+  }
+
+  async removeOfflineRequest(id: number): Promise<void> {
+    try {
+      const db = await this.init();
+      if (!db) return;
+      await db.delete(QUEUE_STORE, id);
+    } catch (error) {
+      logger.error('[OfflineSync] Failed to remove offline request:', error);
+    }
+  }
+
+  // NOTE: Audit Logs Methods
 
   async addAuditLog(log: any): Promise<void> {
     try {
@@ -74,15 +121,25 @@ class IndexedDBService {
     }
   }
 
-  async clearAuditLogs(): Promise<void> {
+  // NOTE: Crypto Methods
+  async getCryptoKey(keyName: string): Promise<CryptoKey | null> {
+    try {
+      const db = await this.init();
+      if (!db) return null;
+      return await db.get(CRYPTO_STORE, keyName);
+    } catch (error) {
+      logger.error('[IndexedDB] Failed to get crypto key:', error);
+      return null;
+    }
+  }
+
+  async saveCryptoKey(keyName: string, key: CryptoKey): Promise<void> {
     try {
       const db = await this.init();
       if (!db) return;
-      
-      await db.clear(STORE_NAME);
-      logger.log('[IndexedDB] Audit logs cleared.');
+      await db.put(CRYPTO_STORE, key, keyName);
     } catch (error) {
-      logger.error('[IndexedDB] Failed to clear audit logs:', error);
+      logger.error('[IndexedDB] Failed to save crypto key:', error);
     }
   }
 }
