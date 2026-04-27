@@ -1,4 +1,4 @@
-// process.d.ts
+// NOTE: process.d.ts
 declare namespace NodeJS {
   interface ProcessEnv {
     KANANA_API_KEY: string;

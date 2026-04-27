@@ -1,4 +1,3 @@
-// src/mocks/handlers.ts
 import { http, passthrough, HttpResponse } from 'msw';
 import { v4 as uuidv4 } from 'uuid';
 import { simulator } from './simulator';
@@ -11,16 +10,55 @@ let isInitialized = false;
 /**
  * Resolves ID to actual UUID if DisplayName is provided
  */
+const levenshtein = (a: string, b: string): number => {
+  const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      if (a[i - 1] === b[j - 1]) matrix[i][j] = matrix[i - 1][j - 1];
+      else matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+    }
+  }
+  return matrix[a.length][b.length];
+};
+
 const resolveUuid = (idOrName: string): string => {
-  // 1. Return if already valid UUID
   if (simulator.agents.has(idOrName)) return idOrName;
   
-  // 2. Find by DisplayName (case-insensitive)
-  const found = Array.from(simulator.agents.values()).find(
-    (a) => a.displayName.toLowerCase() === idOrName.toLowerCase() || a.id === idOrName
-  );
+  const cleanTk = idOrName.toUpperCase().replace(/[^a-zA-Z0-9가-힣]/g, '');
+  let bestMatch = null;
+  let bestScore = Infinity;
+
+  for (const a of Array.from(simulator.agents.values())) {
+    const uuid = a.uuid.toUpperCase();
+    const id = (a.id || '').toUpperCase().replace(/[^a-zA-Z0-9가-힣]/g, '');
+    const dName = (a.displayName || '').toUpperCase().replace(/[^a-zA-Z0-9가-힣]/g, '');
+    const aName = (a.persona || '').toUpperCase().replace(/[^a-zA-Z0-9가-힣]/g, '');
+    
+    if (uuid === idOrName.toUpperCase() || id === cleanTk || dName === cleanTk || aName === cleanTk || 
+        (cleanTk.length >= 2 && (dName.includes(cleanTk) || aName.includes(cleanTk) || id.includes(cleanTk) || uuid.includes(cleanTk)))) {
+      bestMatch = a;
+      bestScore = 0;
+      break;
+    }
+    
+    const distances = [
+      levenshtein(cleanTk, id),
+      levenshtein(cleanTk, dName),
+      levenshtein(cleanTk, aName)
+    ];
+    
+    const minDistance = Math.min(...distances);
+    const threshold = Math.max(1, Math.floor(cleanTk.length * 0.4));
+    
+    if (minDistance <= threshold && minDistance < bestScore) {
+      bestScore = minDistance;
+      bestMatch = a;
+    }
+  }
   
-  return found ? found.uuid : idOrName;
+  return bestMatch ? bestMatch.uuid : idOrName;
 };
 
 const getOrbitPosition = (seed: number, activeTime: number, index: number, isPaused: boolean): [number, number, number] => {
@@ -41,7 +79,7 @@ export const handlers = [
   http.all('*/api/openai', () => passthrough()),
   http.all('*/api/anthropic', () => passthrough()),
 
-  // Stream Handler
+  // NOTE: Stream Handler
   http.get('*/api/stream', () => {
     isInitialized = true;
     const encoder = new TextEncoder();
@@ -49,7 +87,7 @@ export const handlers = [
     
     return new HttpResponse(new ReadableStream({
       start(controller) {
-        // WORKER: Dynamic interval for main thread optimization (250ms ~ 1000ms)
+        // NOTE: WORKER: Dynamic interval for main thread optimization (250ms ~ 1000ms)
         const agentCount = simulator.agents.size;
         const dynamicInterval = Math.max(250, Math.min(1000, agentCount * 5));
         
@@ -119,7 +157,7 @@ export const handlers = [
     }), { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
   }),
 
-  // Bulk Action Handler (w/ resolveUuid)
+  // NOTE: Bulk Action Handler (w/ resolveUuid)
   http.post('*/api/actions/bulk', async ({ request }) => {
     const { actions } = await request.json() as { actions: any[] };
     
@@ -131,7 +169,7 @@ export const handlers = [
       const { action: type, targetId: rawTargetId, value } = action;
       if (!rawTargetId && !['STOP', 'START', 'OVERRIDE', 'RELEASE'].includes(type)) return;
 
-      // Convert provided ID to actual UUID
+      // NOTE: Convert provided ID to actual UUID
       const targetId = resolveUuid(rawTargetId);
 
       switch(type) {
@@ -142,11 +180,14 @@ export const handlers = [
           simulator.updateAgent(targetId, { isPaused: false }); 
           break;
         case 'PRIORITY': 
+        case 'PRIORITY_HIGH':
           if (simulator.agents.has(targetId) && !simulator.state.priorityAgents.includes(targetId)) {
             simulator.state.priorityAgents = [...simulator.state.priorityAgents, targetId];
           }
           break;
         case 'REVOKE': 
+        case 'PRIORITY_LOW':
+        case 'PRIORITY_NORMAL':
           simulator.state.priorityAgents = simulator.state.priorityAgents.filter(id => id !== targetId);
           break;
         case 'TRANSFER':
@@ -187,7 +228,7 @@ export const handlers = [
     return HttpResponse.json({ success: true });
   }),
   
-  // Agent Scale
+  // NOTE: Agent Scale
   http.post('*/api/agents/scale', async ({ request }) => {
     const { count } = await request.json() as any;
     simulator.updateState({ trafficIntensity: count });
@@ -225,7 +266,7 @@ export const handlers = [
     return HttpResponse.json({ success: true, count });
   }),
 
-  // Pause Control
+  // NOTE: Pause Control
   http.post('*/api/agents/:uuid/pause', async ({ request, params }) => {
     const { pause } = await request.json() as any;
     const { uuid } = params;
@@ -240,7 +281,7 @@ export const handlers = [
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
 
-  // Priority Control
+  // NOTE: Priority Control
   http.post('*/api/agents/:uuid/priority', async ({ request, params }) => {
     const { enable } = await request.json() as any;
     const { uuid } = params;
@@ -260,7 +301,7 @@ export const handlers = [
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
 
-  // Agent Rename
+  // NOTE: Agent Rename
   http.post('*/api/agents/:uuid/rename', async ({ params, request }) => {
     const { uuid } = params;
     const { newName } = await request.json() as any;
@@ -273,7 +314,7 @@ export const handlers = [
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
 
-  // Get Agent Config
+  // NOTE: Get Agent Config
   http.get('*/api/agents/:uuid/config', ({ params }) => {
     const { uuid } = params;
     const agent = simulator.agents.get(uuid as string);
@@ -288,7 +329,7 @@ export const handlers = [
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
 
-  // Inject Debug Event
+  // NOTE: Inject Debug Event
   http.post('*/api/mock/inject-event', async ({ request }) => {
     try {
       const { targetId, eventType, severity } = await request.json() as any;
@@ -302,7 +343,7 @@ export const handlers = [
     }
   }),
 
-  // Global Stop
+  // NOTE: Global Stop
   http.post('*/api/stop', async ({ request }) => {
     const { enable } = await request.json() as any;
     simulator.state.globalStop = enable;
@@ -310,7 +351,7 @@ export const handlers = [
     return HttpResponse.json({ success: true });
   }),
 
-  // Emergency Override
+  // NOTE: Emergency Override
   http.post('*/api/override', () => { 
     simulator.state.overrideSignal = true; 
     simulator.state.holder = 'USER';
@@ -318,7 +359,7 @@ export const handlers = [
     return HttpResponse.json({ success: true }); 
   }),
 
-  // Release Override
+  // NOTE: Release Override
   http.post('*/api/release', () => { 
     simulator.state.overrideSignal = false; 
     simulator.state.holder = null;
@@ -326,7 +367,7 @@ export const handlers = [
     return HttpResponse.json({ success: true }); 
   }),
 
-  // Terminate Agent
+  // NOTE: Terminate Agent
   http.delete('*/api/agents/:uuid', ({ params }) => { 
     const { uuid } = params;
     const targetId = String(uuid);
@@ -349,7 +390,7 @@ export const handlers = [
     return HttpResponse.json({ success: true });
   }),
 
-  // Force Transfer Lock
+  // NOTE: Force Transfer Lock
   http.post('*/api/agents/:uuid/transfer-lock', ({ params }) => { 
     const { uuid } = params;
     const targetId = String(uuid);
@@ -362,7 +403,7 @@ export const handlers = [
     return HttpResponse.json({ success: true }); 
 }),
 
-  // Update Priority Order
+  // NOTE: Update Priority Order
   http.post('*/api/agents/priority-order', async ({ request }) => {
     const { order } = await request.json() as any;
     simulator.state.priorityAgents = order;
@@ -371,7 +412,7 @@ export const handlers = [
     return HttpResponse.json({ success: true });
   }),
 
-  // Update Agent Config (POST)
+  // NOTE: Update Agent Config (POST)
   http.post('*/api/agents/:uuid/config', async ({ params, request }) => {
     const body = await request.json() as any;
     const { uuid } = params;

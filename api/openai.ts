@@ -47,7 +47,9 @@ export default async function handler(req: Request) {
         if (agentKeyObj && (agentKeyObj as any).openai) {
           customKey = (agentKeyObj as any).openai;
         }
-      } catch {}
+      } catch (err) {
+        logger.warn(`Failed to parse x-agent-keys header for agent ${agentIdentifier}`, err);
+      }
     }
 
     const apiKey = (customKey || process.env.OPENAI_API_KEY || "").trim();
@@ -61,8 +63,8 @@ export default async function handler(req: Request) {
           message: `Mocked OpenAI Response for ${agentIdentifier || "Unknown"} (Risk: ${riskLevel})`,
           risk_level: riskLevel,
           condition: riskLevel >= 8 ? "CRITICAL" : "NORMAL",
-          temp: 25,
-          humidity: 60,
+          temp: 20 + Math.floor(Math.random() * 15),
+          humidity: 50 + Math.floor(Math.random() * 30),
           strategy: riskLevel >= 8 ? "Evacuate immediately" : null
         })
       };

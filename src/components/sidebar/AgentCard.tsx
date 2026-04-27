@@ -1,4 +1,3 @@
-// src/components/sidebar/AgentCard.tsx
 import React, { useMemo } from 'react';
 import clsx from 'clsx';
 import { GripVertical } from 'lucide-react';

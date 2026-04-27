@@ -1,4 +1,3 @@
-// src/App.tsx
 import React, { useEffect, useState, Suspense } from 'react';
 import clsx from 'clsx';
 import { ErrorBoundary, FallbackProps } from 'react-error-boundary';
@@ -19,7 +18,7 @@ export const ErrorFallback = ({ error, resetErrorBoundary }: FallbackProps) => {
       </pre>
       <button 
         onClick={() => {
-          // Zustand 전역 상태 강제 초기화
+          
           useATCStore.setState({ 
             isAiMode: false, 
             isAiAutoMode: false, 
@@ -54,12 +53,12 @@ const App = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isStarted, setIsStarted] = useState(false);
   const openKananaKeyModal = useUIStore(s => s.openKananaKeyModal);
-  const riskLevel = useATCStore(s => s.state?.risk_level || 0);
+  const riskLevel = useATCStore(s => s.riskScore || 0);
 
-  useOfflineArchive(); // IndexedDB 기반 오프라인 아카이빙 적용
+  useOfflineArchive(); 
 
   useEffect(() => {
-    // 앱 초기화 시 IndexedDB에 저장된 과거 Audit Logs 불러오기
+    
     useATCStore.getState().initAuditLogs?.();
   }, []);
 
@@ -70,7 +69,7 @@ const App = () => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Pre-fetch WebAssembly OCR model in the background so it's ready without delay when user uploads an image
+    // NOTE: Pre-fetch OCR model in background
     setTimeout(() => {
       ocrService.init().catch(e => console.error('Failed to pre-fetch OCR:', e));
     }, 3000); // 3 seconds delay to avoid blocking initial critical UI rendering
@@ -122,7 +121,7 @@ const App = () => {
       <div className={clsx(
         "h-screen w-screen font-sans relative overflow-hidden select-none", 
         isDark ? "bg-[#05090a] text-gray-300" : "bg-[#f1f5f9] text-slate-800",
-        riskLevel > 8.5 && "emergency-pulse" // 85 (8.5) 초과 시 emergency-pulse 클래스 적용
+        riskLevel > 85 && "emergency-pulse" 
       )}>
         {/* Offline Banner */}
         {isOffline && (
@@ -132,12 +131,16 @@ const App = () => {
           </div>
         )}
 
-        {/* 1. 메인 뷰 (전체 배경) */}
-        <Dashboard />
+        {/* 1. Main View */}
+        <div className="absolute inset-0 bg-[#050505]">
+          <Dashboard />
+        </div>
         
-        {/* 2. 우측 사이드바 (Dashboard 위에 고정) */}
-        <div className="fixed top-0 right-0 h-full z-50">
-          <SidebarContainer />
+        {/* 2. Right Sidebar */}
+        <div className="absolute top-0 right-0 bottom-0 z-50 h-full pointer-events-none">
+          <div className="pointer-events-auto h-full shadow-2xl">
+            <SidebarContainer />
+          </div>
         </div>
       </div>
     </ErrorBoundary>

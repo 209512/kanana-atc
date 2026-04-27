@@ -1,4 +1,3 @@
-// src/components/command/AutonomyController.tsx
 import { useATCStore } from '@/store/useATCStore';
 
 export const AutonomyController: React.FC = () => {
@@ -28,7 +27,7 @@ export const AutonomyController: React.FC = () => {
           }`}
           style={{ width: `${autonomyLevel}%` }}
         />
-        {/* 임계점 마커 */}
+        {/* Threshold Markers */}
         <div className="absolute left-[80%] top-0 h-full w-0.5 bg-white/20" />
       </div>
 

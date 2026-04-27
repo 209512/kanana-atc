@@ -1,4 +1,3 @@
-// src/components/monitoring/queue/QueueDisplay.tsx
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import Draggable from 'react-draggable';
 import clsx from 'clsx';
@@ -13,12 +12,14 @@ import { useTranslation } from 'react-i18next';
 export const QueueDisplay = () => {
     const { t } = useTranslation();
     const state = useATCStore(s => s.state);
-    const { isDark, setQueueOpen } = useUIStore();
+    const isDark = useUIStore(s => s.isDark);
+    const setQueueOpen = useUIStore(s => s.setQueueOpen);
     const { priorityAgents = [], queueAgents = [], masterAgent = null } = useCategorizedAgents();
     const [isOpen, setIsOpen] = useState(true);
+    const [isDragging, setIsDragging] = useState(false);
     const nodeRef = useRef<HTMLDivElement>(null);
 
-    // 윈도우 사이즈 변경 시 Draggable position 리셋을 위해 key 변경용 state 추가
+    
     const [windowWidth, setWindowWidth] = useState(window.innerWidth);
     useEffect(() => {
         const handleResize = () => setWindowWidth(window.innerWidth);
@@ -34,12 +35,20 @@ export const QueueDisplay = () => {
     const isAiMode = state?.overrideSignal || targetIds.size > 0;
 
     return (
-        <Draggable key={windowWidth} nodeRef={nodeRef} handle=".queue-handle" bounds="body" disabled={windowWidth < 768}>
+        <Draggable 
+            key={windowWidth} 
+            nodeRef={nodeRef} 
+            handle=".queue-handle" 
+            bounds="body" 
+            disabled={windowWidth < 768}
+            onStart={() => setIsDragging(true)}
+            onStop={() => setIsDragging(false)}
+        >
             <div 
                 ref={nodeRef} 
                 className={clsx(
                     "fixed rounded-xl border shadow-2xl backdrop-blur-md z-40 flex flex-col overflow-hidden pointer-events-auto",
-                    "transition-[height,border,box-shadow,background-color] duration-300",
+                    !isDragging && "transition-[height,border,box-shadow,background-color] duration-300",
                     windowWidth < 768 
                         ? "!bottom-0 !top-auto !left-0 !right-0 !w-full !rounded-t-2xl !rounded-b-none ![transform:none]" 
                         : "w-72",

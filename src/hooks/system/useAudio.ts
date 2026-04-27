@@ -1,4 +1,3 @@
-// src/hooks/system/useAudio.ts
 import { useCallback, useEffect, useRef } from 'react';
 import { audioService } from '@/utils/audioService';
 
@@ -27,7 +26,7 @@ export const useAudio = (isAdminMuted: boolean) => {
 
   const playSuccess = useCallback(() => {
     if (isAdminMuted) return;
-    // 이중 톤 재생
+    
     audioService.play(440, 'sine', 0.1, 0.04);
     setSafeTimeout(() => {
       audioService.play(880, 'sine', 0.1, 0.03);

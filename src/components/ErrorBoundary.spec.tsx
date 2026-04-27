@@ -28,11 +28,11 @@ describe('ErrorBoundary & Store Reset', () => {
     useUIStore.setState({ isDark: true });
   });
 
-  it('리셋 시 Zustand 스토어들이 초기화되어야 한다', () => {
+  it('should reset Zustand stores when reset is triggered', () => {
     let thrown = false;
     
     const handleReset = () => {
-      // 리셋 시 전역 상태 초기화 시뮬레이션
+      
       useATCStore.setState({ isAiMode: false, agents: [] });
       useUIStore.setState({ isDark: false });
       thrown = false;

@@ -1,4 +1,3 @@
-// src/components/common/AgentActionButtons.tsx
 import React from 'react';
 import clsx from 'clsx';
 import { Play, Pause, Trash2, Star, Zap, Edit2 } from 'lucide-react';
@@ -19,7 +18,7 @@ interface AgentActionButtonsProps {
     tooltipPosition?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-left' | 'bottom-right';
 }
 
-// AI 제안 시 공통 스타일: 하늘색 글로우 및 맥동 효과
+
 const proposedStyle = "ring-2 ring-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.6)] animate-[pulse_1s_infinite] scale-110 z-10";
 
 export const RenameButton = ({ 
@@ -61,10 +60,10 @@ export const AgentActionButtons = ({
     const isGlobalStopped = !!state.globalStop;
     const targetUuid = agent.uuid || agent.id; 
     
-    // AI 제안 확인 로직 (Map 구조에서 O(1) 탐색으로 최적화)
+    
     const proposalsMap = state.pendingProposals;
     
-    // Map에서 uuid나 displayId를 키로 가진 제안을 찾습니다.
+    
     let myProposal = undefined;
     if (proposalsMap) {
         for (const p of proposalsMap.values()) {
@@ -75,21 +74,18 @@ export const AgentActionButtons = ({
         }
     }
     
-    // 개별 액션 매칭
+    
     const isPauseProposed = myProposal?.action === 'PAUSE';
     const isResumeProposed = myProposal?.action === 'RESUME';
-    const isPriorityProposed = myProposal?.action === 'PRIORITY' || myProposal?.action === 'REVOKE';
+    const isPriorityProposed = myProposal?.action === 'PRIORITY' || myProposal?.action === 'REVOKE' || myProposal?.action === 'PRIORITY_HIGH' || myProposal?.action === 'PRIORITY_LOW';
     const isTransferProposed = myProposal?.action === 'TRANSFER';
     const isTerminateProposed = myProposal?.action === 'TERMINATE';
     const isRenameProposed = myProposal?.action === 'RENAME';
 
-    const isThisAgentTarget = !!myProposal;
-
     return (
         <div className={clsx(
             "flex items-center gap-1", 
-            layout === 'compact' ? "justify-end w-full" : "",
-            isThisAgentTarget && "bg-sky-500/10 rounded-lg p-0.5 ring-1 ring-sky-500/20"
+            layout === 'compact' ? "justify-end w-full" : ""
         )}>
             {/* Rename Button */}
             {onStartRename && (

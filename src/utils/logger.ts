@@ -1,29 +1,29 @@
-// src/utils/logger.ts
+import { color } from './doNotUseColor';
+
 const isProduction = import.meta.env?.PROD || process.env.NODE_ENV === 'production';
 
 export const logger = {
   log: (...args: unknown[]) => {
     if (!isProduction) {
-      console.log(...args);
+      console.log(color('[LOG]'), ...args);
     }
   },
   warn: (...args: unknown[]) => {
     if (!isProduction) {
-      console.warn(...args);
+      console.warn(color('[WARN]'), ...args);
     }
   },
   error: (...args: unknown[]) => {
-    // TODO: Integrate Sentry or keep generic error for production
     if (!isProduction) {
-      console.error(...args);
+      console.error(color('[ERROR]'), ...args);
     } else {
-      // LOG: Generic error in production
-      console.error("[App Error] An error occurred.");
+      // NOTE: PRODUCTION: Replace with real error monitoring service (e.g. Sentry) in the future
+      console.error(color('[App Error]'), ...args);
     }
   },
   debug: (...args: unknown[]) => {
     if (!isProduction) {
-      console.debug(...args);
+      console.debug(color('[DEBUG]'), ...args);
     }
   },
 };

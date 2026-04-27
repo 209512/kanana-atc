@@ -1,4 +1,3 @@
-// src/hooks/agent/useAgentSettings.ts
 import { useState, useEffect } from 'react';
 import { useATCStore } from '@/store/useATCStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -16,7 +15,7 @@ export const useAgentSettings = (onClose: () => void) => {
     const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI.');
     const [isLoading, setIsLoading] = useState(false);
 
-    const API_URL = import.meta.env.VITE_API_BASE_URL || '';
+    const API_URL = import.meta.env?.VITE_API_BASE_URL || '';
 
     useEffect(() => {
         if (!selectedAgent || selectedAgent === "Select") return;
@@ -57,9 +56,11 @@ export const useAgentSettings = (onClose: () => void) => {
         };
     }, [selectedAgent, API_URL]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedAgent || selectedAgent === "Select") { onClose(); return; }
+    const handleSave = async (closeAfterSave: boolean = true) => {
+        if (!selectedAgent || selectedAgent === "Select") { 
+            if (closeAfterSave) onClose(); 
+            return; 
+        }
 
         setIsLoading(true);
         try {
@@ -67,18 +68,24 @@ export const useAgentSettings = (onClose: () => void) => {
                 uuid: selectedAgent, 
                 config: { provider, model: model.trim(), systemPrompt } 
             });
+            // NOTE: Optional success toast/notification could be added here
         } catch (err) {
             logger.error("SYNC_ERROR:", err);
         } finally {
             setIsLoading(false);
-            onClose();
+            if (closeAfterSave) onClose();
         }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await handleSave(true);
     };
 
     return {
         agents, isDark, areTooltipsEnabled, setAreTooltipsEnabled,
         selectedAgent, setSelectedAgent, provider, setProvider,
         model, setModel, systemPrompt, setSystemPrompt,
-        isLoading, handleSubmit
+        isLoading, handleSubmit, handleSave
     };
 };

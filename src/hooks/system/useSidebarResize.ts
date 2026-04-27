@@ -1,4 +1,3 @@
-// src/hooks/system/useSidebarResize.ts
 import React, { useState, useEffect, useRef } from 'react';
 
 export const useSidebarResize = (_initialWidth: number, setWidth: (w: number) => void) => {
@@ -35,14 +34,24 @@ export const useSidebarResize = (_initialWidth: number, setWidth: (w: number) =>
                 if (sidebarRef.current) {
                     sidebarRef.current.style.width = `${finalWidth === 0 ? 4 : finalWidth}px`;
                 }
-                setWidth(finalWidth);
             });
         };
 
-        const handleMouseUp = () => {
+        const handleMouseUp = (e: MouseEvent) => {
             setIsResizing(false);
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
+            
+            
+            const newWidth = window.innerWidth - e.clientX;
+            let finalWidth = newWidth;
+            if (newWidth < 40) {
+                finalWidth = 0;
+            } else {
+                finalWidth = Math.max(250, Math.min(newWidth, 800));
+            }
+            setWidth(finalWidth);
+            
             if (frameRef.current) {
                 cancelAnimationFrame(frameRef.current);
             }
@@ -56,6 +65,15 @@ export const useSidebarResize = (_initialWidth: number, setWidth: (w: number) =>
         return () => {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
+            
+            
+            if (isResizing) {
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                if (frameRef.current) {
+                    cancelAnimationFrame(frameRef.current);
+                }
+            }
         };
     }, [isResizing, setWidth]);
 

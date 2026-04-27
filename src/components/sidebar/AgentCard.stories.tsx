@@ -51,7 +51,7 @@ export const Interactive: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
 
-    // 1. AgentCard 전체 클릭 시 onSelect 호출 확인
+    
     const cardText = canvas.getByText('Alpha');
     await userEvent.click(cardText);
     await expect(args.onSelect).toHaveBeenCalled();

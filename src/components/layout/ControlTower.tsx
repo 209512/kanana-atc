@@ -1,4 +1,3 @@
-// src/components/layout/ControlTower.tsx
 import React from 'react';
 import clsx from 'clsx';
 import { TerminalLog } from '@/components/monitoring/terminal/TerminalLog';
@@ -14,10 +13,10 @@ export const ControlTower = () => {
 
     return (
         <>
-            {/* Panel Restore Buttons (FABs) - Sidebar width 에 맞춰 이동 */}
+            {/* Panel Restore Buttons (FABs) */}
             <div 
-                className="absolute top-20 right-0 flex flex-col gap-2 z-40 pointer-events-none transition-all duration-300" 
-                style={{ transform: `translateX(calc(-${actualSidebarWidth}px - 16px))` }}
+                className="absolute top-20 flex flex-col gap-2 z-40 pointer-events-none transition-all duration-300 md:right-[calc(var(--sidebar-width)+16px)] right-[80px]" 
+                style={{ '--sidebar-width': `${actualSidebarWidth}px` } as React.CSSProperties}
             >
                 {!isTacticalPanelOpen && (
                     <Tooltip content="Open Tactical Command" position="left">
@@ -61,11 +60,11 @@ export const ControlTower = () => {
             </div>
 
             <div 
-                className="absolute inset-y-0 right-0 pointer-events-none transition-all duration-300" 
+                className="absolute inset-y-0 pointer-events-none transition-all duration-300 md:right-[var(--sidebar-width)] right-0" 
                 style={{ 
                     zIndex: 30,
-                    right: `${actualSidebarWidth}px`
-                }}
+                    '--sidebar-width': `${actualSidebarWidth}px`
+                } as React.CSSProperties}
             >
                 <TerminalLog />
                 {isQueueOpen && <QueueDisplay />}

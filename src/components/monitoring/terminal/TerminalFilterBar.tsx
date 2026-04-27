@@ -1,4 +1,3 @@
-// src/components/monitoring/terminal/TerminalFilterBar.tsx
 import React, { useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { Info } from 'lucide-react';

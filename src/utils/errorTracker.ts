@@ -1,4 +1,3 @@
-// src/utils/errorTracker.ts
 import { logger } from './logger';
 
 type ErrorContext = Record<string, unknown>;
@@ -34,11 +33,11 @@ class ErrorTracker {
   }
 
   captureException(error: Error, context?: ErrorContext) {
-    // Log locally
+    // NOTE: Log locally
     logger.error('[Captured Error]', error, context);
 
-    // In a real environment, you would send this to Sentry, Datadog, or Vercel Analytics:
-    // e.g., Sentry.captureException(error, { extra: context });
+    // NOTE: In a real environment, you would send this to Sentry, Datadog, or Vercel Analytics:
+    // NOTE: e.g., Sentry.captureException(error, { extra: context });
     
     this.reportToBackend(error, context);
   }
@@ -46,13 +45,13 @@ class ErrorTracker {
   captureMessage(message: string, context?: ErrorContext) {
     logger.warn('[Captured Message]', message, context);
     
-    // e.g., Sentry.captureMessage(message, { extra: context });
+    // NOTE: e.g., Sentry.captureMessage(message, { extra: context });
     
     this.reportToBackend(new Error(message), context);
   }
 
   private async reportToBackend(error: Error, context?: ErrorContext) {
-    // If we have an API endpoint configured for logging, send it there
+    // NOTE: If we have an API endpoint configured for logging, send it there
     const logEndpoint = import.meta.env?.VITE_ERROR_LOG_ENDPOINT;
     if (!logEndpoint) return;
 
@@ -71,7 +70,7 @@ class ErrorTracker {
         })
       });
     } catch (e) {
-      // Silent fail to avoid infinite loop
+      // NOTE: Silent fail to avoid infinite loop
       console.error('Failed to report error to backend', e);
     }
   }

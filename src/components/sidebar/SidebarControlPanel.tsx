@@ -1,4 +1,3 @@
-// src/components/sidebar/SidebarControlPanel.tsx
 import React from 'react';
 import clsx from 'clsx';
 import { Unlock, Lock } from 'lucide-react';

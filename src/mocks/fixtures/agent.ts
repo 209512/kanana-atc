@@ -1,4 +1,3 @@
-// src/mocks/fixtures/agents.ts
 export const mockAgentBase = {
   id: 'Agent-1',
   uuid: '1234-5678',

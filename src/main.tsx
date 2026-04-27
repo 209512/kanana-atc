@@ -1,4 +1,3 @@
-// src/main.tsx
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from '@/App'
@@ -9,7 +8,7 @@ import { errorTracker } from './utils/errorTracker'
 import { ATCInitializer } from '@/components/layout/ATCInitializer'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
-// Initialize centralized error tracker
+// NOTE: Initialize centralized error tracker
 errorTracker.init();
 
 export const queryClient = new QueryClient({
@@ -22,49 +21,50 @@ export const queryClient = new QueryClient({
 });
 
 async function enableMocking() {
-  const isLocal = import.meta.env.MODE === 'development';
-  const isVercel = window.location.hostname.includes('vercel.app');
-  const forceMock = import.meta.env.VITE_USE_MSW === 'true';
-
-  // VITE_USE_MSW=true 이면 프로덕션 빌드라도 MSW를 강제로 포함시킵니다 (CI/CD E2E 테스트용)
-  if ((import.meta.env.DEV && (isLocal || isVercel)) || forceMock) {
-    const { worker } = await import('./mocks/browser');
-    const { http, HttpResponse } = await import('msw');
-    
-    // E2E 테스트(Playwright 등) 환경을 위해 전역 객체에 worker 노출
-    if (typeof window !== 'undefined') {
-      (window as unknown as { msw: unknown }).msw = { worker, http, HttpResponse };
-    }
-
-    return worker.start({
-      onUnhandledRequest(req, print) {
-        const url = req.url.toString();
-        // MSW가 처리할 필요 없는 정적 리소스 요청들은 경고를 띄우지 않습니다.
-        if (
-          url.includes('/api/kanana') || 
-          url.includes('/proxy/kanana') ||
-          url.includes('node_modules') ||
-          url.includes('@react-refresh') ||
-          url.includes('fonts.googleapis.com') ||
-          url.includes('fonts.gstatic.com') ||
-          url.includes('cdn.jsdelivr.net') ||
-          url.includes('chrome-extension') ||
-          url.includes('.vite') ||
-          url.includes('src/')
-        ) {
-          return;
-        }
-        print.warning();
-      },
-      serviceWorker: {
-        url: '/mockServiceWorker.js'
-      }
-    });
+  // NOTE: MSW is ALWAYS required for this project regardless of environment
+  const { worker } = await import('./mocks/browser');
+  const { http, HttpResponse } = await import('msw');
+  
+  
+  if (typeof window !== 'undefined') {
+    (window as unknown as { msw: unknown }).msw = { worker, http, HttpResponse };
   }
+
+  return worker.start({
+    onUnhandledRequest(req, print) {
+      const url = req.url.toString();
+      
+      if (
+        url.includes('/api/kanana') || 
+        url.includes('/proxy/kanana') ||
+        url.includes('node_modules') ||
+        url.includes('@react-refresh') ||
+        url.includes('fonts.googleapis.com') ||
+        url.includes('fonts.gstatic.com') ||
+        url.includes('cdn.jsdelivr.net') ||
+        url.includes('chrome-extension') ||
+        url.includes('.vite') ||
+        url.includes('src/')
+      ) {
+        return;
+      }
+      print.warning();
+    },
+    serviceWorker: {
+      url: '/mockServiceWorker.js'
+    }
+  });
 }
 
 function renderApp(root: HTMLElement) {
-  createRoot(root).render(
+  
+  let appRoot = (window as any).__REACT_ROOT__;
+  if (!appRoot) {
+    appRoot = createRoot(root);
+    (window as any).__REACT_ROOT__ = appRoot;
+  }
+
+  appRoot.render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <ATCInitializer>

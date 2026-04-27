@@ -1,4 +1,3 @@
-// src/components/sidebar/SidebarHeader.tsx
 import React, { useState } from 'react';
 import clsx from 'clsx';
 import { ShieldAlert, Activity, Settings, Volume2, VolumeX, Camera, Loader2 } from 'lucide-react';
@@ -33,11 +32,12 @@ export const SidebarHeader = ({ onOpenSettings }: { onOpenSettings: () => void }
             
             const targetElement = document.getElementById('atc-dashboard') || document.body;
             const canvas = await html2canvas(targetElement, {
-                backgroundColor: isDark ? '#000000' : '#ffffff',
+                background: isDark ? '#000000' : '#ffffff',
                 useCORS: true,
+                // @ts-ignore
                 scale: window.devicePixelRatio || 2,
                 logging: false,
-                ignoreElements: (element) => {
+                ignoreElements: (element: Element) => {
                     if (element.id === 'sonner-toast-container') return true;
                     return false;
                 }

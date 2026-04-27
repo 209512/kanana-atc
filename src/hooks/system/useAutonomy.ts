@@ -1,4 +1,3 @@
-// src/hooks/system/useAutonomy.ts
 import { useMemo, useCallback, useEffect, useRef } from 'react';
 import { Agent, ATCState } from '@/contexts/atcTypes';
 import { ATC_CONFIG } from '@/constants/atcConfig';
@@ -31,19 +30,20 @@ export const useAutonomy = (state: ATCState, agents: Agent[], addLog: any) => {
     if (now - lastActionTimestamp.current < RISK.COOL_DOWN_MS || lastActionTimestamp.current === 0) return false;
     if (now - lastActionTimestamp.current > RISK.TREND_MAX_AGE) return false;
 
-    riskHistory.current.push(riskScore);
-    if (riskHistory.current.length > RISK.TREND_WINDOW + 2) riskHistory.current.shift();
+    
+    // NOTE: Calculate trend based on the latest riskScore
+    const currentHistory = [...riskHistory.current, riskScore];
 
-    if (riskHistory.current.length >= RISK.TREND_WINDOW) {
-      const isWorsening = riskHistory.current.every((val, i, arr) => i === 0 || val >= arr[i-1]);
-      if (isWorsening && riskScore > 60) {
+    if (currentHistory.length >= RISK.TREND_WINDOW) {
+      const isWorsening = currentHistory.slice(-RISK.TREND_WINDOW).every((val, i, arr) => i === 0 || val >= arr[i-1]);
+      if (isWorsening && riskScore > LEVELS.CAUTION) {
         addLog(LOG_MSG.EARLY_EXIT, "critical", "KANANA-O");
         lastActionTimestamp.current = 0;
         return true; 
       }
     }
     return false;
-  }, [riskScore, addLog, RISK, LOG_MSG]);
+  }, [riskScore, addLog, RISK, LOG_MSG, LEVELS]);
 
   const recordAction = () => {
     lastActionTimestamp.current = Date.now();
@@ -52,7 +52,7 @@ export const useAutonomy = (state: ATCState, agents: Agent[], addLog: any) => {
 
   const autonomyLevel = useMemo(() => {
     if (riskScore > RISK.EMERGENCY_LEVEL) return LEVELS.EMERGENCY;
-    if (riskScore > 50) return LEVELS.CAUTION;
+    if (riskScore > LEVELS.CAUTION) return LEVELS.CAUTION;
     return LEVELS.NORMAL;
   }, [riskScore, RISK, LEVELS]);
   
@@ -64,9 +64,9 @@ export const useAutonomy = (state: ATCState, agents: Agent[], addLog: any) => {
     }
   }, [riskScore, RISK.HISTORY_LIMIT]);
 
-  // Sync riskScore with global store (MSW mode)
+  // NOTE: Sync riskScore with global store (MSW mode)
   useEffect(() => {
-    if (import.meta.env.VITE_USE_MSW === 'true') {
+    if (import.meta.env?.VITE_USE_MSW === 'true') {
       const msw = (window as any).msw;
       if (msw && msw.worker) {
         const newRiskLevel = Math.round(riskScore / 10);

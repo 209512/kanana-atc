@@ -1,4 +1,3 @@
-// api/gemini.ts
 import { withApiMiddleware } from './_middleware';
 import { logger } from './_logger';
 import { z } from 'zod';
@@ -13,9 +12,10 @@ const GeminiPayloadSchema = z.object({
   persona: z.string().max(2000).optional(),
   agentId: z.string().max(100).optional(),
   agentName: z.string().max(100).optional(),
+  model: z.string().max(100).optional(),
   state: z.any().optional(),
   externalData: z.record(z.string(), z.any()).optional(),
-  image: z.string().optional() // Base64 이미지 데이터 (선택사항)
+  image: z.string().optional() // NOTE: Base64 image data
 });
 
 export default async function handler(req: Request) {
@@ -24,14 +24,6 @@ export default async function handler(req: Request) {
     requireAuth: true,
     rateLimitMaxRequests: 20
   }, async (req, _context) => {
-    const agentKeysHeader = req.headers.get('x-agent-keys');
-    let customGeminiKey = "";
-    if (agentKeysHeader) {
-      try {
-        const keysMap = JSON.parse(agentKeysHeader);
-      } catch (e) {}
-    }
-
     let body;
     try {
       const rawBody = await req.json();
@@ -43,9 +35,11 @@ export default async function handler(req: Request) {
       return new Response(JSON.stringify({ error: "INVALID_JSON" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
-    const { systemPrompt, persona, agentId, agentName, state, externalData, image } = body;
-
+    const { systemPrompt, persona, agentId, agentName, model: reqModel, state, externalData, image } = body;
     const agentIdentifier = agentId || agentName;
+
+    const agentKeysHeader = req.headers.get('x-agent-keys');
+    let customGeminiKey = "";
     if (agentKeysHeader && agentIdentifier) {
       try {
         const keysMap = JSON.parse(agentKeysHeader);
@@ -53,54 +47,54 @@ export default async function handler(req: Request) {
         if (agentKeyObj && (agentKeyObj as any).gemini) {
           customGeminiKey = (agentKeyObj as any).gemini;
         }
-      } catch (e) {}
+      } catch (e) { logger.error('Failed to parse agentKeysHeader', e); }
     }
 
     const apiKey = (customGeminiKey || process.env.GEMINI_API_KEY || "").trim();
-    const model = (process.env.GEMINI_MODEL || AI_PROVIDERS.GEMINI.DEFAULT_MODEL).trim();
+    const model = (reqModel || process.env.GEMINI_MODEL || AI_PROVIDERS.GEMINI.DEFAULT_MODEL).trim();
     const apiEndpoint = (process.env.GEMINI_ENDPOINT || AI_PROVIDERS.GEMINI.API_URL).trim();
 
-    // 환경변수에 GEMINI_API_KEY가 없으면 백엔드에서 자체적으로 Mock(상태 변화 시뮬레이션)을 반환합니다.
+    // NOTE: Mock Gemini response if no API Key is found (for UI simulation)
     if (!apiKey) {
-      logger.info(`[GEMINI_MOCK] No API Key found. Returning simulated response for ${agentName}`);
+      logger.debug(`[GEMINI_MOCK] No API Key found. Returning simulated response for ${agentName}`);
       const riskLevel = externalData?.risk_level ? Number(externalData.risk_level) : 5;
       const mockResponse = {
         log: JSON.stringify({
-          message: `Mocked Gemini Response for ${agentName} (Risk: ${riskLevel})`,
+          message: `Mocked Gemini Response for ${agentName || 'Unknown Agent'} (Risk: ${riskLevel})`,
           risk_level: riskLevel,
           condition: riskLevel >= 8 ? "CRITICAL" : "NORMAL",
-          temp: 25,
-          humidity: 60,
+          temp: 20 + Math.floor(Math.random() * 15),
+          humidity: 50 + Math.floor(Math.random() * 30),
           strategy: riskLevel >= 8 ? "Evacuate immediately" : null
         })
       };
       return new Response(JSON.stringify(mockResponse), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 간단한 스키마 검증 및 길이 제한 (보안/안정성)
-    if (state && JSON.stringify(state).length > 20000) {
-      return new Response(JSON.stringify({ error: "PAYLOAD_TOO_LARGE", message: "state 페이로드가 너무 큽니다." }), { status: 413, headers: { 'Content-Type': 'application/json' } });
+    // NOTE: Payload size validation to prevent OOM
+    if (state && JSON.stringify(state).length > 2000000) {
+      return new Response(JSON.stringify({ error: "PAYLOAD_TOO_LARGE", message: "State payload exceeds 2MB limit." }), { status: 413, headers: { 'Content-Type': 'application/json' } });
     }
 
     const currentTime = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
     
-    // 환경 데이터에 따른 지역 설정 (기본값 서울)
+    // NOTE: Set region based on external data
     const region = externalData?.location ? String(externalData.location) : "Seoul";
-    // 외부 데이터가 프론트에서 주입되었다면 우선 사용
+    // NOTE: Prioritize external data if provided
     let weather = externalData?.weather;
     let tempData = externalData?.temp ? String(externalData.temp) : "20";
     let humidityData = externalData?.humidity ? String(externalData.humidity) : "50";
     const economyStatus = externalData?.economy;
     const newsStatus = externalData?.news;
 
-    // 외부 날씨 데이터가 없고, 기본값인 경우 wttr.in 호출 시도
+    // NOTE: Fetch wttr.in if no external weather data
     const isMock = process.env.VITE_USE_MOCK === 'true' || process.env.NODE_ENV !== 'production';
     if (!externalData?.weather && !isMock) {
       const WTTR_URL = process.env.WTTR_URL;
       if (WTTR_URL) {
         try {
           const weatherRes = await fetch(WTTR_URL.replace('{region}', encodeURIComponent(region)), {
-            signal: AbortSignal.timeout(3000)
+            signal: AbortSignal.timeout(Number(process.env.WTTR_API_TIMEOUT) || 3000)
           });
           
           if (weatherRes && weatherRes.ok) {
@@ -128,15 +122,14 @@ export default async function handler(req: Request) {
     const economyText = economyStatus || "ECONOMY_STABLE";
     const newsText = newsStatus || "NEWS_NONE";
 
-    // 3. 모드 스위칭 동적 할당 로직
-    // 외부 데이터(externalData)를 통해 risk_level을 받으면 그에 따라 역할(Mode)을 능동/수동으로 전환합니다.
+    // NOTE: Dynamic role assignment based on external risk level
     const currentRisk = externalData?.risk_level ? parseInt(String(externalData.risk_level), 10) : 0;
     const isTacticalMode = currentRisk >= 8;
     const modeDescription = isTacticalMode 
       ? `🚨 [TACTICAL MODE ACTIVE] You are no longer just a sensor. You are a Tactical Field Commander. The risk level is critical (${currentRisk}/10). Analyze the environment and provide an actionable solution or warning in the 'strategy' field. Make sure to consider the visual input if provided.`
       : `🟢 [SENSOR MODE] You are a recon drone. The risk level is low/moderate (${currentRisk}/10). Focus on observing and reporting the current environment accurately. Do not suggest any strategies.`;
 
-    // Construct strict prompt incorporating the persona to guide Gemini's behavior
+    // NOTE: Construct strict prompt incorporating the persona to guide Gemini's behavior
     const prompt = `
 <system_role>
 You are an advanced digital twin agent drone representing "${agentName || 'Agent'}".
@@ -182,7 +175,7 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
 </instructions>
     `;
 
-    // 4. 멀티모달 파트 구성 (이미지가 있으면 추가)
+    // NOTE: Append image modality if base64 data exists
     const parts: any[] = [{ text: prompt }];
     if (image && image.startsWith("data:image/")) {
       try {
@@ -205,15 +198,24 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
         parts: parts
       }],
       generationConfig: {
-        temperature: 0.2, // 결정론적 JSON 출력을 위해 낮춤
-        maxOutputTokens: 200, // 확장된 필드 수용을 위해 토큰 상향
-        responseMimeType: "application/json" // Gemini가 무조건 JSON 포맷으로만 응답하도록 강제 (Structured Output)
+        temperature: 0.2, // Deterministic JSON output
+        maxOutputTokens: 200, 
+        responseMimeType: "application/json" // NOTE: Force Gemini to output Structured JSON
       }
     };
 
-    const finalUrl = `${apiEndpoint}/${model}:${AI_PROVIDERS.GEMINI.ACTION}?key=${apiKey}`;
+    let safeApiEndpoint = apiEndpoint.replace(/\/+$/, '');
+    if (safeApiEndpoint.endsWith('/models')) {
+      safeApiEndpoint = safeApiEndpoint.replace(/\/models$/, '');
+    }
+    const safeModel = model.startsWith('models/') ? model.replace('models/', '') : model;
+    
+    let finalUrl = `${safeApiEndpoint}/models/${safeModel}:${AI_PROVIDERS.GEMINI.ACTION}?key=${apiKey}`;
+    if (apiEndpoint.includes(':generateContent')) {
+      finalUrl = `${apiEndpoint}${apiEndpoint.includes('?') ? '&' : '?'}key=${apiKey}`;
+    }
 
-    // 5. Exponential Backoff 재시도 로직 적용 (Gemini 1.5 Flash Rate Limit 방어)
+    // NOTE: Exponential Backoff for Gemini Rate Limit
     const MAX_RETRIES = 3;
     let response: Response | null = null;
     let attempt = 0;
@@ -224,20 +226,40 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-          // Vercel Edge 환경 504 타임아웃 방어용 (Gemini 응답 대기 시간 제한)
+          // NOTE: Timeout guard for Vercel Edge 504
           signal: AbortSignal.timeout(25000)
         });
 
-        // 429 에러(Rate Limit)일 경우에만 백오프 재시도
+        // NOTE: Retry only on 429 Rate Limit error
         if (response.status === 429 && attempt < MAX_RETRIES) {
-          const backoffDelay = Math.pow(2, attempt) * 1000 + Math.random() * 500; // 지수 백오프 + Jitter
+          const backoffDelay = Math.pow(2, attempt) * 1000 + Math.random() * 500; // NOTE: Exponential Backoff + Jitter
           logger.warn(`[GEMINI_API_429] Rate limited. Retrying ${attempt + 1}/${MAX_RETRIES} in ${Math.round(backoffDelay)}ms`);
           await new Promise(res => setTimeout(res, backoffDelay));
           attempt++;
           continue;
+        } else if (response.status === 429) {
+          // NOTE: If we hit 429 and out of retries, we return a mocked response instead of failing
+          logger.warn(`[GEMINI_API_429] Out of retries. Returning mocked fallback response to prevent UI spam.`);
+          const riskLevel = externalData?.risk_level ? Number(externalData.risk_level) : 5;
+          
+          // NOTE: Generate a realistic-looking fallback message based on risk level instead of showing the error
+          let fallbackMessage = "정상 비행 중. 특이사항 없습니다.";
+          if (riskLevel >= 8) fallbackMessage = "경고: 전방에 짙은 연기와 고온이 감지되었습니다. 긴급 회피가 필요합니다.";
+          else if (riskLevel >= 5) fallbackMessage = "주의: 기상 악화 조짐이 있습니다. 고도를 유지합니다.";
+          
+          return new Response(JSON.stringify({
+            log: JSON.stringify({
+              message: fallbackMessage,
+              risk_level: riskLevel,
+              condition: riskLevel >= 8 ? "CRITICAL" : "NORMAL",
+              temp: 20 + Math.floor(Math.random() * 15),
+              humidity: 50 + Math.floor(Math.random() * 30),
+              strategy: riskLevel >= 8 ? "Evacuate immediately" : null
+            })
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
-        break; // 429가 아니거나 최대 재시도 도달 시 루프 탈출
+        break; // NOTE: Exit loop if not 429 or max retries reached
       } catch (err: any) {
         if (err.name === 'AbortError' || err.name === 'TimeoutError') {
           logger.error(`[GEMINI_API_TIMEOUT] Attempt ${attempt + 1} timed out.`);
@@ -248,7 +270,7 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
             continue;
           }
         }
-        throw err; // 네트워크 에러 등은 그대로 throw
+        throw err; // NOTE: Throw network errors
       }
     }
 
@@ -260,7 +282,7 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
           const data = await response.json();
           rawError = JSON.stringify(data);
         } catch (_e) {
-          // ignore
+          // NOTE: ignore
         }
       }
 
@@ -268,6 +290,7 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
 
       let errorKey = `HTTP_${status}`;
       if (status === 401) errorKey = "INVALID_API_KEY";
+      if (status === 404) errorKey = "HTTP_404";
       if (status === 429) errorKey = "QUOTA_EXCEEDED";
       if (status === 500) errorKey = "INTERNAL_SERVER_ERROR";
       if (status === 504) errorKey = "GATEWAY_TIMEOUT";

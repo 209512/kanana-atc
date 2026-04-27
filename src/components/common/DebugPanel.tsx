@@ -1,4 +1,3 @@
-// src/components/common/DebugPanel.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { Flame, CloudRain, Briefcase, Zap, X, Send } from 'lucide-react';
@@ -13,11 +12,11 @@ export const DebugPanel = () => {
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        // MSW가 꺼져있는 프로덕션 환경이면 아예 동작하지 않게 처리
-        if (import.meta.env.VITE_USE_MSW === 'false') return;
+        
+        if (import.meta.env?.VITE_USE_MSW === 'false') return;
 
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Ctrl + Shift + D (또는 Cmd + Shift + D) 로 패널 토글
+            
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
                 e.preventDefault();
                 setIsVisible(prev => !prev);
@@ -71,7 +70,7 @@ export const DebugPanel = () => {
             }
         };
 
-        if (!isVisible || import.meta.env.VITE_USE_MSW === 'false') return null;
+        if (!isVisible || import.meta.env?.VITE_USE_MSW === 'false') return null;
 
         return (
             <div className="fixed bottom-4 right-4 z-50 bg-black/90 border border-red-500/50 rounded-xl p-4 shadow-[0_0_20px_rgba(239,68,68,0.2)] backdrop-blur-md text-white font-mono text-xs w-80">

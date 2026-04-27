@@ -1,4 +1,3 @@
-// src/components/sidebar/AgentList.tsx
 import React from 'react';
 import { Star, Shield, Play, Pause } from 'lucide-react';
 import { Reorder } from 'framer-motion';

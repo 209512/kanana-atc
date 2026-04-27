@@ -40,11 +40,12 @@ export const CompactSidebar = ({ onOpenSettings }: Props) => {
             await new Promise(resolve => setTimeout(resolve, 100));
             const targetElement = document.getElementById('atc-dashboard') || document.body;
             const canvas = await html2canvas(targetElement, {
-                backgroundColor: isDark ? '#000000' : '#ffffff',
+                background: isDark ? '#000000' : '#ffffff',
                 useCORS: true,
+                // @ts-ignore
                 scale: window.devicePixelRatio || 2,
                 logging: false,
-                ignoreElements: (element) => {
+                ignoreElements: (element: Element) => {
                     if (element.id === 'sonner-toast-container') return true;
                     return false;
                 }
@@ -118,7 +119,7 @@ export const CompactSidebar = ({ onOpenSettings }: Props) => {
 
                 {agents.filter(a => a.status === 'paused' || a.isPaused || globalStop || holder === a.id || a.priority).map(agent => {
                     const isPaused = agent.status === 'paused' || agent.isPaused || globalStop;
-                    const isLocked = holder === agent.id || agent.locked;
+                    const isLocked = holder === agent.id || agent.isPaused;
                     
                     let color = agent.color || '#3b82f6';
                     if (isPaused) color = isDark ? '#64748b' : '#94a3b8';

@@ -1,4 +1,3 @@
-// src/components/command/TacticalItem.tsx
 import React, { memo } from 'react';
 import clsx from 'clsx';
 import { useTacticalActions } from '@/hooks/agent/useTacticalActions';

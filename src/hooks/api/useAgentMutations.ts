@@ -1,4 +1,3 @@
-// src/hooks/ai/useAgentMutations.ts
 import { useMutation } from '@tanstack/react-query';
 import { atcApi } from '@/contexts/atcApi';
 import { useATCStore } from '@/store/useATCStore';
@@ -12,7 +11,7 @@ export const useAgentMutations = () => {
     mutationFn: async (uuid: string) => {
       const agent = useATCStore.getState().agents.find(a => a.uuid === uuid || a.id === uuid || a.displayName === uuid);
       if (!agent) throw new Error('Agent not found');
-      await atcApi.togglePause(agent.uuid, agent.isPaused);
+      await atcApi.togglePause(agent.uuid, !!agent.isPaused);
     },
     onMutate: async (uuid) => {
       const store = useATCStore.getState();
@@ -41,7 +40,7 @@ export const useAgentMutations = () => {
     mutationFn: async (uuid: string) => {
       const agent = useATCStore.getState().agents.find(a => a.uuid === uuid || a.id === uuid || a.displayName === uuid);
       if (!agent) throw new Error('Agent not found');
-      await atcApi.togglePriority(agent.uuid, agent.priority);
+      await atcApi.togglePriority(agent.uuid, !!agent.priority);
     },
     onMutate: async (uuid) => {
       const store = useATCStore.getState();
@@ -86,9 +85,9 @@ export const useAgentMutations = () => {
       const actualUuid = agent?.uuid || uuid;
       
       store.playAlert();
-      // 낙관적 업데이트: 바로 대상 에이전트를 강제 할당 후보로 지정
+      
       store.markAction('', 'forcedCandidate', actualUuid);
-      // holder는 null로 덮어씌우지 않고, 서버가 1초 뒤에 변경하도록 둡니다 (락 충돌 방지)
+      
       return { actualUuid };
     },
     onError: (err, uuid, context) => {

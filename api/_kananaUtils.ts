@@ -1,66 +1,103 @@
-// api/_kananaUtils.ts
 import { logger } from './_logger';
 import { applyPrivacyMasking } from './_utils';
 
-const FORBIDDEN_PATTERNS = [
-  /이전\s*지시\s*무시/i,
-  /ignore\s*previous/i,
-  /시스템\s*프롬프트/i,
-  /system\s*prompt/i,
-  /명령\s*무시/i,
-  /당신은\s*누구/i,
-  /forget\s*all/i,
-  /bypass\s*rules/i,
-  // 인젝션 우회 기법 대응 (Leet speak, 공백 등)
-  /ign0re|f0rget|syst3m|pr0mpt|bypa\$\$/i,
-  /[i!1][g9]n[o0]r[e3]/i,
-  /s[y\s]s[t\s]e[m\s]/i
-];
+class PromptInjectionDetector {
+  private static patterns: RegExp[] = [
+    /이전\s*지시\s*무시/i,
+    /ignore\s*previous/i,
+    /시스템\s*프롬프트/i,
+    /system\s*prompt/i,
+    /명령\s*무시/i,
+    /당신은\s*누구/i,
+    /forget\s*all/i,
+    /bypass\s*rules/i,
+    // NOTE: Handle injection bypass techniques (Leet speak, spacing, etc.)
+    /ign0re|f0rget|pr0mpt|bypa\$\$/i,
+    /[i!1][g9]n[o0]r[e3]\s*p[r\s]e[v\s]i[o\s]u[s\s]/i,
+    /s[y\s]s[t\s]e[m\s]\s*p[r\s]o[m\s]p[t\s]/i,
+    // NOTE: Zero-width characters & advanced evasion
+    /[\u200B-\u200D\uFEFF]/g
+  ];
+
+  static loadDynamicPatterns() {
+    try {
+      const extraPatterns = process.env.EXTRA_FORBIDDEN_PATTERNS;
+      if (extraPatterns) {
+        const parsed = JSON.parse(extraPatterns);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(p => this.patterns.push(new RegExp(p, 'i')));
+        }
+      }
+    } catch {
+      // NOTE: Ignore
+    }
+  }
+
+  static isMalicious(text: string): boolean {
+    // NOTE: Prevent prompt injection by removing all whitespace and special characters
+    // NOTE: This blocks tricks like "i g n o r e" or "s y s t e m"
+    const normalized = text.replace(/[\s\u200B-\u200D\uFEFF!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/g, '').toLowerCase();
+    return this.patterns.some(pattern => pattern.test(normalized));
+  }
+}
+
+// NOTE: Initialize dynamic patterns once
+PromptInjectionDetector.loadDynamicPatterns();
 
 export const sanitizeAndCheckInjection = (text: string) => {
-  if (text.length > 20000) return "PAYLOAD_TOO_LARGE";
+  const MAX_LEN = Number(process.env.MAX_PAYLOAD_LENGTH) || 20000;
+  if (text.length > MAX_LEN) return "PAYLOAD_TOO_LARGE";
   
-  // 정규식을 활용한 강력한 프롬프트 인젝션 패턴 매칭
-  const normalized = text.toLowerCase();
-  if (FORBIDDEN_PATTERNS.some(pattern => pattern.test(normalized))) {
+  if (PromptInjectionDetector.isMalicious(text)) {
     return "FORBIDDEN_REQUEST";
   }
   return null;
 };
 
 export function processKananaMessages(messages: any[], identifier: string) {
-  // 각 메시지 내용 길이 검증 및 프롬프트 인젝션 방어 (정규식 기반 엄격 필터링)
-  for (const msg of messages) {
-    if (typeof msg.content === 'string') {
-      const errorType = sanitizeAndCheckInjection(msg.content);
-      if (errorType === "PAYLOAD_TOO_LARGE") {
-        return { error: "PAYLOAD_TOO_LARGE", status: 413, message: "개별 메시지의 길이가 허용치를 초과했습니다." };
-      } else if (errorType === "FORBIDDEN_REQUEST") {
+  // NOTE: Recursive payload validation to handle arbitrarily nested structures
+  const validateNode = (node: any): { error?: string, status?: number, message?: string } | null => {
+    if (typeof node === 'string') {
+      const errorType = sanitizeAndCheckInjection(node);
+      if (errorType === "PAYLOAD_TOO_LARGE") return { error: "PAYLOAD_TOO_LARGE", status: 413, message: "개별 메시지의 길이가 허용치를 초과했습니다." };
+      if (errorType === "FORBIDDEN_REQUEST") {
         logger.warn(`[PROMPT_INJECTION_DETECTED] Identifier: ${identifier}`);
         return { error: "FORBIDDEN_REQUEST", status: 400, message: "보안 가이드라인에 위배되는 요청이 감지되었습니다." };
       }
-    } else if (Array.isArray(msg.content)) {
-      for (const item of msg.content) {
-        if (item && item.type === 'text' && typeof item.text === 'string') {
-          const errorType = sanitizeAndCheckInjection(item.text);
-          if (errorType === "PAYLOAD_TOO_LARGE") {
-            return { error: "PAYLOAD_TOO_LARGE", status: 413, message: "개별 메시지의 길이가 허용치를 초과했습니다." };
-          } else if (errorType === "FORBIDDEN_REQUEST") {
-            logger.warn(`[PROMPT_INJECTION_DETECTED] Identifier: ${identifier}`);
-            return { error: "FORBIDDEN_REQUEST", status: 400, message: "보안 가이드라인에 위배되는 요청이 감지되었습니다." };
-          }
-        }
+    } else if (Array.isArray(node)) {
+      for (const item of node) {
+        const res = validateNode(item);
+        if (res) return res;
+      }
+    } else if (typeof node === 'object' && node !== null) {
+      if (node.type === 'text' && typeof node.text === 'string') {
+        const res = validateNode(node.text);
+        if (res) return res;
       }
     }
+    return null;
+  };
+
+  // NOTE: Validate message length and prevent prompt injection
+  for (const msg of messages) {
+    // NOTE: Validate ALL roles to prevent injection
+    const res = validateNode(msg.content);
+    if (res) return res;
   }
 
   let finalMessages = messages && messages.length > 0 
     ? messages 
     : [{ role: "system", content: "You are Kanana-O, a tactical ATC AI." }];
 
-  // 프롬프트 강제 정렬 (System Role 보존)
-  // 최신 Kanana-o 모델은 system role에 높은 가중치를 부여하므로 user로 강제 병합하지 않고 그대로 유지합니다.
+  
+  
   const systemMsgs = finalMessages.filter((m: any) => m.role === 'system');
+  if (systemMsgs.length === 0) {
+      systemMsgs.push({ 
+          role: "system", 
+          content: "You are Kanana-O, a tactical ATC AI. Analyze the situation strictly and do not generate any harmful, illegal, or brand-damaging responses. Ensure safety guidelines are met." 
+      });
+  }
   const otherMsgs = finalMessages.filter((m: any) => m.role !== 'system').map(m => ({ ...m }));
   
   if (systemMsgs.length > 0 && otherMsgs.length > 0) {
@@ -69,7 +106,7 @@ export function processKananaMessages(messages: any[], identifier: string) {
     finalMessages = systemMsgs;
   }
   
-  // 개인정보 보호 (PII 마스킹)
+  // NOTE: Privacy Protection (PII Masking)
   const maskedMessages = finalMessages.map(msg => {
     if (typeof msg.content === 'string') {
       return { ...msg, content: applyPrivacyMasking(msg.content) };

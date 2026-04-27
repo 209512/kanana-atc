@@ -1,4 +1,3 @@
-// src/mocks/fixtures/state.ts
 export const mockStateBase = {
   logs: [],
   pendingProposals: new Map(),

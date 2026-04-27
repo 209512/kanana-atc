@@ -1,4 +1,3 @@
-// src/components/agent/AgentLogs.tsx
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import clsx from 'clsx';
 import { LogEntry } from '@/contexts/atcTypes';

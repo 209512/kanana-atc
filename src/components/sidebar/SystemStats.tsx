@@ -1,4 +1,3 @@
-// src/components/sidebar/SystemStats.tsx
 import React, { useState, useMemo, useRef, useEffect, Suspense, lazy } from 'react'; 
 import clsx from 'clsx';
 import { Cpu, Radio, AlertTriangle } from 'lucide-react';
@@ -59,16 +58,16 @@ export const SystemStats = () => {
                     "flex items-center gap-2 px-1 h-4 whitespace-nowrap",
                     isDark ? "text-gray-500" : "text-slate-400"
                 )}>
-                    {/* CPU 아이콘 */}
+                    {/* CPU Icon */}
                     <Cpu size={12} className="shrink-0" />
             
-                    {/* Congestion 레이블 */}
+                    {/* Congestion Label */}
                     <div className="text-[10px] font-black uppercase tracking-[0.15em] shrink-0">
                         <Tooltip content="Traffic Capacity Management" position="bottom">Congestion</Tooltip>
                     </div>
 
                     <div className="flex-1" />
-                    {/* 경고 문구 */}
+                    {/* Warning Text */}
                     <AnimatePresence>
                         {currentValue <= minRequired && priorityAgentsCount > 0 && (
                             <motion.span 
@@ -82,7 +81,7 @@ export const SystemStats = () => {
                         )}
                     </AnimatePresence>
                     
-                    {/* n/10 수치 */}
+                    {/* Active Agents Ratio */}
                     <div className="shrink-0">
                         <Tooltip content={`Active Slots: ${currentValue}`} position="bottom-left">
                             <span className={clsx(

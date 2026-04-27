@@ -1,4 +1,3 @@
-// src/hooks/system/useSTT.ts
 import { useState, useCallback, useEffect, useRef } from 'react';
 
 export const useSTT = (onResult: (text: string) => void) => {
@@ -13,12 +12,11 @@ export const useSTT = (onResult: (text: string) => void) => {
 
     useEffect(() => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        let recogInstance: any = null;
 
-        if (SpeechRecognition && !recognition) {
+        if (SpeechRecognition) {
             const recog = new SpeechRecognition();
-            recog.continuous = true; // 연속 인식
-            recog.interimResults = true; // 중간 결과 보고 활성화
+            recog.continuous = true; // NOTE: Continuous recognition
+            recog.interimResults = true; // NOTE: Enable interim results
             recog.lang = 'ko-KR';
 
             recog.onresult = (event: any) => {
@@ -42,7 +40,7 @@ export const useSTT = (onResult: (text: string) => void) => {
             recog.onerror = (e: any) => {
                 console.error("STT Error:", e.error);
                 setIsListening(false);
-                // 네트워크 에러 등으로 끊길 시 자동 재시작 로직 (선택적)
+                // NOTE: Optional auto-restart on network error
                 if (e.error === 'network') {
                     retryTimeoutRef.current = setTimeout(() => {
                         try { recog.start(); setIsListening(true); } catch(_ignore) { /* ignore start error on network retry */ }
@@ -52,21 +50,16 @@ export const useSTT = (onResult: (text: string) => void) => {
             
             recog.onend = () => setIsListening(false);
 
-            recogInstance = recog;
+            setRecognition(recog);
         }
 
-        // 컴포넌트 마운트 후 비동기적으로 상태 업데이트
-        if (recogInstance && !recognition) {
-            setTimeout(() => setRecognition(recogInstance), 0);
-        }
-
-        // Cleanup: 컴포넌트 언마운트 시 타이머 클리어
+        // NOTE: Cleanup timer and recognizer on unmount
         return () => {
             if (retryTimeoutRef.current) {
                 clearTimeout(retryTimeoutRef.current);
             }
         };
-    }, [recognition]);
+    }, []); // Empty dependency array ensures this runs only once on mount
 
     const toggleListening = useCallback((currentInputValue: string = '') => {
         if (isListening) {
@@ -74,8 +67,8 @@ export const useSTT = (onResult: (text: string) => void) => {
             setIsListening(false);
         } else {
             try {
-                // 음성 인식 시작 시, 현재 입력창의 텍스트를 기억하도록 처리할 수 있으나,
-                // onResult가 매번 호출되면서 덮어쓰므로 컴포넌트 측에서 조합하는 것이 더 안전합니다.
+                // NOTE: Could remember current text on start,
+                // NOTE: but it's safer to combine in the component since onResult overwrites
                 recognition?.start();
                 setIsListening(true);
             } catch (e) {
