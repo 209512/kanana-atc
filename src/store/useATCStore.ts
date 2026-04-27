@@ -132,6 +132,6 @@ export const initATCEventBus = () => {
 initATCEventBus();
 
 // NOTE: Expose store to window for E2E testing
-if (typeof window !== 'undefined' && (import.meta.env?.MODE !== 'production' || import.meta.env?.VITE_USE_MSW === 'true')) {
+if (typeof window !== 'undefined' && (import.meta.env.MODE !== 'production' || import.meta.env.VITE_USE_MSW === 'true')) {
   (window as unknown as { useATCStore: unknown }).useATCStore = useATCStore;
 }

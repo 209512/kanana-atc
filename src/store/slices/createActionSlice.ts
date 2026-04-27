@@ -47,7 +47,7 @@ export const createActionSlice: StateCreator<
       const newFieldLocks = new Map(s.fieldLocks);
       
       // NOTE: Use configurable lock duration to prevent rubber-banding
-      const lockDuration = Number(import.meta.env?.VITE_LOCK_DURATION) || 5000;
+      const lockDuration = Number(import.meta.env.VITE_LOCK_DURATION) || 5000;
       
       if (isDelete) {
         newDeletedIds.add(targetId);

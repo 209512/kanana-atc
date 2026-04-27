@@ -16,12 +16,12 @@ export const RADAR_CONFIG = {
         LERP_PAUSED: 0.1,
         LERP_RESUMING: 0.02,
         OFFSET_Y: -180, 
-        ROTATION_SPEED: Number(import.meta.env?.VITE_DRONE_ROTATION_SPEED) || 0.02,
-        ROTATION_FORCED: Number(import.meta.env?.VITE_DRONE_ROTATION_FORCED) || 0.08,
-        ROTATION_AI: Number(import.meta.env?.VITE_DRONE_ROTATION_AI) || 0.15,
+        ROTATION_SPEED: Number(import.meta.env.VITE_DRONE_ROTATION_SPEED) || 0.02,
+        ROTATION_FORCED: Number(import.meta.env.VITE_DRONE_ROTATION_FORCED) || 0.08,
+        ROTATION_AI: Number(import.meta.env.VITE_DRONE_ROTATION_AI) || 0.15,
     },
     ANIMATION: {
-        DETAIL_POPUP_DELAY_MS: Number(import.meta.env?.VITE_DETAIL_POPUP_DELAY_MS) || 1500,
+        DETAIL_POPUP_DELAY_MS: Number(import.meta.env.VITE_DETAIL_POPUP_DELAY_MS) || 1500,
     },
     BACKGROUND: {
         PARTICLE_COUNT: 3000,

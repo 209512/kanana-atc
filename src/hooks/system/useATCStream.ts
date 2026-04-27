@@ -8,7 +8,7 @@ import { getSafeBaseUrl } from '@/utils/apiClient';
 import { ATC_CONFIG } from '@/constants/atcConfig';
 
 const getStreamUrl = () => {
-  const envBaseUrl = import.meta.env?.VITE_API_BASE_URL || '';
+  const envBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
   const baseUrl = envBaseUrl ? getSafeBaseUrl(envBaseUrl) : '';
   return `${baseUrl}/api/stream`;
 };

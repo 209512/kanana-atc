@@ -13,7 +13,7 @@ export const DebugPanel = () => {
 
     useEffect(() => {
         
-        if (import.meta.env?.VITE_USE_MSW === 'false') return;
+        if (import.meta.env.VITE_USE_MSW === 'false') return;
 
         const handleKeyDown = (e: KeyboardEvent) => {
             
@@ -70,7 +70,7 @@ export const DebugPanel = () => {
             }
         };
 
-        if (!isVisible || import.meta.env?.VITE_USE_MSW === 'false') return null;
+        if (!isVisible || import.meta.env.VITE_USE_MSW === 'false') return null;
 
         return (
             <div className="fixed bottom-4 right-4 z-50 bg-black/90 border border-red-500/50 rounded-xl p-4 shadow-[0_0_20px_rgba(239,68,68,0.2)] backdrop-blur-md text-white font-mono text-xs w-80">

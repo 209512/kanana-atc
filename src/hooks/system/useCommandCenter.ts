@@ -238,7 +238,7 @@ export const useCommandCenter = () => {
           }
 
           // NOTE: ACTION: Fallback to Web Speech API if Kanana Audio is disabled or if in Vercel environment
-          const envAudio = import.meta.env?.VITE_USE_KANANA_AUDIO;
+          const envAudio = import.meta.env.VITE_USE_KANANA_AUDIO;
           const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
           if (envAudio !== 'true' && envAudio !== true || isVercel) {
             if (report) {

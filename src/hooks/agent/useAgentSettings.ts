@@ -15,7 +15,7 @@ export const useAgentSettings = (onClose: () => void) => {
     const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI.');
     const [isLoading, setIsLoading] = useState(false);
 
-    const API_URL = import.meta.env?.VITE_API_BASE_URL || '';
+    const API_URL = import.meta.env.VITE_API_BASE_URL || '';
 
     useEffect(() => {
         if (!selectedAgent || selectedAgent === "Select") return;
