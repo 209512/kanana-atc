@@ -1,4 +1,3 @@
-// src/store/slices/createActionSlice.ts
 import { StateCreator } from 'zustand';
 import { ATCStore, ActionSlice } from './types';
 import { ATC_CONFIG } from '@/constants/atcConfig';
@@ -43,27 +42,30 @@ export const createActionSlice: StateCreator<
     const targetId = uuid ? String(uuid) : 'SYSTEM_GLOBAL';
     
     set((s) => {
-      // Immutable state updates for React rendering
+      // NOTE: Immutable state updates for React rendering
       const newDeletedIds = new Set(s.deletedIds);
       const newFieldLocks = new Map(s.fieldLocks);
+      
+      // NOTE: Use configurable lock duration to prevent rubber-banding
+      const lockDuration = Number(import.meta.env?.VITE_LOCK_DURATION) || 5000;
       
       if (isDelete) {
         newDeletedIds.add(targetId);
       } else if (field) {
         const targetLocks = new Map(newFieldLocks.get(targetId) || new Map());
-        targetLocks.set(field, { value, expiry: Date.now() + 5000 });
+        targetLocks.set(field, { value, expiry: Date.now() + lockDuration });
         newFieldLocks.set(targetId, targetLocks);
       }
 
       if (uuid === '') {
-        // Global state update
+        // NOTE: Global state update
         return { 
           deletedIds: newDeletedIds,
           fieldLocks: newFieldLocks,
           state: { ...s.state, [field]: value } 
         };
       } else {
-        // Agent specific update
+        // NOTE: Agent specific update
         const newAgents = s.agents.map(agent => {
           if (agent.uuid === uuid || agent.id === uuid) {
             if (isDelete) return { ...agent, isDeleting: true };

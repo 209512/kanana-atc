@@ -1,4 +1,3 @@
-// src/store/slices/types.ts
 import { Agent, ATCState, AIProposal, ParsedAction, LogEntry } from '@/contexts/atcTypes';
 
 export interface CoreSlice {
@@ -13,16 +12,17 @@ export interface CoreSlice {
 export interface AiSlice {
   isAiMode: boolean;
   isAiAutoMode: boolean;
-  aiQuota: number;
+  isAnalyzing: boolean;
   pendingProposals: Map<string, AIProposal>;
   riskScore: number;
   autonomyLevel: number;
   toggleAiMode: (isAi: boolean) => Promise<void>;
   toggleAiAutoMode: (value: boolean) => void;
-  setAiQuota: (quota: number) => void;
+  setIsAnalyzing: (isAnalyzing: boolean) => void;
   setRiskData: (riskScore: number, autonomyLevel: number) => void;
   approveProposals: () => Promise<void>;
   rejectProposals: () => void;
+  clearProposals: () => void;
 }
 
 export interface ActionSlice {
@@ -37,7 +37,7 @@ export interface ActionSlice {
   updateAgentConfigLocal: (uuid: string, config: Partial<Agent>) => void;
   updatePriorityOrder: (order: string[]) => void;
 
-  // 외부 변수로 관리되던 객체들을 Zustand 내부 상태로 편입 (React Reactivity 확보)
+  
   deletedIds: Set<string>;
   fieldLocks: Map<string, Map<string, { value: unknown, expiry: number }>>;
 
@@ -60,8 +60,6 @@ export interface AuditLog {
 }
 
 export interface ATCStore extends CoreSlice, AiSlice, ActionSlice {
-  lastKnownGoodActions?: ParsedAction[];
-  setLastKnownGoodActions?: (actions: ParsedAction[]) => void;
   metrics?: {
     totalAiCalls: number;
     jailbreakAttempts: number;
@@ -72,5 +70,5 @@ export interface ATCStore extends CoreSlice, AiSlice, ActionSlice {
   auditLogs?: AuditLog[];
   addAuditLog?: (log: Omit<AuditLog, 'timestamp'>) => void;
   initAuditLogs?: () => Promise<void>;
-  isInitializing?: boolean; // 초기 스케일링 중복 방지 플래그
+  isInitializing?: boolean; 
 }
