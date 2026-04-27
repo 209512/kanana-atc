@@ -1,8 +1,7 @@
-// src/workers/streamWorker.ts
 import { mergeAgentsWorker, mergeStateWorker, BufferedAgent, BufferedState } from './streamMerger.logic';
 import { Agent, ATCState } from '../contexts/atcTypes';
 
-// 워커 스레드는 이전 프레임의 상태(캐시)를 유지하여 불필요한 메인 스레드 직렬화/역직렬화를 줄입니다.
+
 let prevAgents: Agent[] = [];
 let prevState: ATCState = {
   logs: [],
