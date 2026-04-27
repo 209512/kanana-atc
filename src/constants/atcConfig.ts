@@ -1,24 +1,31 @@
-// src/constants/atcConfig.ts
+const getEnvOrLocal = (key: string, fallback: number) => {
+  if (typeof window !== 'undefined' && window.localStorage && typeof window.localStorage.getItem === 'function') {
+    const local = window.localStorage.getItem(key);
+    if (local !== null && !isNaN(Number(local))) return Number(local);
+  }
+  return Number((import.meta.env as Record<string, string>)?.[key]) || fallback;
+};
+
 export const ATC_CONFIG = {
-  // 리스크 및 분석 임계치
+  
   RISK: {
-    LOAD_THRESHOLD: Number(import.meta.env?.VITE_LOAD_THRESHOLD) || 70,
-    LATENCY_THRESHOLD: Number(import.meta.env?.VITE_LATENCY_THRESHOLD) || 100,
+    LOAD_THRESHOLD: getEnvOrLocal('VITE_LOAD_THRESHOLD', 70),
+    LATENCY_THRESHOLD: getEnvOrLocal('VITE_LATENCY_THRESHOLD', 100),
     MAX_SCORE: 100,
     PENALTY_COLLISION: 25,
     PENALTY_DENSITY: 5,
     HISTORY_LIMIT: 10,
-    COOL_DOWN_MS: Number(import.meta.env?.VITE_COOL_DOWN_MS) || 2500,
+    COOL_DOWN_MS: getEnvOrLocal('VITE_COOL_DOWN_MS', 2500),
     TREND_WINDOW: 3,
     TREND_MAX_AGE: 7000,
-    EMERGENCY_LEVEL: Number(import.meta.env?.VITE_EMERGENCY_LEVEL) || 85,
+    EMERGENCY_LEVEL: getEnvOrLocal('VITE_EMERGENCY_LEVEL', 85),
   },
 
-  // 시뮬레이터 및 네트워크 타이밍
+  
   SIMULATOR: {
-    STREAM_INTERVAL: Number(import.meta.env?.VITE_STREAM_INTERVAL) || 100,
+    STREAM_INTERVAL: getEnvOrLocal('VITE_STREAM_INTERVAL', 100),
     BASE_URL: '/api',
-    LOCK_DURATION: Number(import.meta.env?.VITE_LOCK_DURATION) || 5000,
+    LOCK_DURATION: getEnvOrLocal('VITE_LOCK_DURATION', 5000),
     TRANSFER_DELAY: 800,
     API_TIMEOUT: 60000,
     API_RETRIES: 0,
@@ -37,39 +44,42 @@ export const ATC_CONFIG = {
     THINKING_AGENT: 'AGENT-THINKING',
     NETWORK_AGENT: "NETWORK",
     SYSTEM_AGENT: 'AGENT-SYSTEM',
+    POLL_MAX_RETRIES: 60,
+    POLL_INTERVAL_MS: 2000,
+    ANALYSIS_COOLDOWN_MS: 10000,
   },
 
-  // 로그
+  
   LOGS: {
     MAX_DISPLAY: 1000,
   },
   LOG_MSG: {
-    // [TERMINATE/SCALE]
+    // NOTE: [TERMINATE/SCALE]
     TERMINATING: (name: string) => `❌ NODE_OFFLINE: TERMINATED_[${name}]`,
     TRAFFIC_SCALED: (count: number) => `🚀 TRAFFIC_ADJUSTED: ${count}_NODES_ACTIVE`,
 
-    // [STATE]
+    // NOTE: [STATE]
     SUSPENDED: "⏸️ NODE_STATE: SUSPENDED",
     RESUMED: "▶️ NODE_STATE: ACTIVE",
     LOCK_RELEASED_PAUSED: "🔓 ACCESS_RELEASED: NODE_PAUSED",
     LOCK_RELEASED: "🔓 ACCESS_RELEASED: IDLE",
 
-    // [LOCK/ACCESS]
+    // NOTE: [LOCK/ACCESS]
     LOCK_GRANTED: (fence: number) => `🔒 ACCESS_ACQUIRED: TOKEN_#${fence}`,
     TRANSFER_SUCCESS: `✨ LOCK_HANDOVER: PROTOCOL_COMPLETE`,
     FORCE_TRANSFER: "⚡ LOCK_OVERRIDE: MANUAL_TRANSFER",
 
-    // [PRIORITY]
+    // NOTE: [PRIORITY]
     PRIORITY_GRANTED: "⭐ PRIORITY_LEVEL: ELEVATED",
     PRIORITY_REVOKED: "⭐ PRIORITY_LEVEL: NORMALIZED",
     PRIORITY_UPDATED: (seq: string) => `📑 POLICY_REVISED: QUEUE_[${seq}]`,
     PRIORITY_CONTENTION: `🚨 CONTENTION_ALERT: PRIORITY_CONFLICT`,
 
-    // [CONTENTION]
+    // NOTE: [CONTENTION]
     WAIT_FOR: (name: string) => `⚔️ RESOURCE_BUSY: QUEUED_BEHIND_[${name}]`,
     BLOCKED_BY: (name: string) => `🚫 ACCESS_DENIED: HELD_BY_[${name}]`,
 
-    // [SYSTEM/AI]
+    // NOTE: [SYSTEM/AI]
     GLOBAL_STOP: "🚨 SYSTEM_HALT: EMERGENCY_STOP_ACTIVE",
     GLOBAL_START: "✅ SYSTEM_READY: OPERATIONS_RESUMED",
     EMERGENCY_OVERRIDE: "🚨 SIGNAL_OVERRIDE: MANUAL_CONTROL_ACTIVE",
@@ -77,7 +87,7 @@ export const ATC_CONFIG = {
     CONFIG_UPDATED: "⚙️ CONFIG_SYNC: PARAMETERS_UPDATED",
     CALLSIGN_REV: (name: string) => `📝 CALLSIGN_UPDATED: ${name}`,
 
-    // [AI_PROVIDER]
+    // NOTE: [AI_PROVIDER]
     AI_MODE_ON: "🌐 AI_LINK: ESTABLISHED (AUTOPILOT_ON)",
     AI_MODE_OFF: "🔌 AI_LINK: DISCONNECTED (MANUAL_ONLY)",
     PROPOSAL_EXEC: (count: number) => `⚙️ AI_EXECUTION: DEPLOYING_${count}_ACTIONS`,
@@ -86,14 +96,14 @@ export const ATC_CONFIG = {
     RECOVERY_COMPLETE: "🛡️ CONTROL_RECOVERY: OPERATOR_IN_COMMAND",
     EARLY_EXIT: "🚨 EARLY_EXIT: NEGATIVE_TREND_DETECTED",
     
-    // AI 처리 관련
+    
     AI_THINKING: "🧠 AI_ANALYSIS: EVALUATING_RADAR_CONTEXT",
     AI_QUOTA_EXCEEDED: "⚠️ AI_LIMIT: DAILY_QUOTA_EXCEEDED",
     AI_PARSE_ERROR: "❌ AI_DATA: INVALID_RESPONSE_FORMAT",
     AI_AUTO_PILOT: (count: number) => `🚀 AUTO_PILOT: EXECUTING_${count}_ACTIONS`,
     AI_PROPOSALS_FOUND: (count: number) => `🤖 AI_PROPOSALS: ${count}_ACTIONS_DETECTED`,
     
-    // 네트워크 에러
+    
     ERR_400: "🚫 AI_ERR: BAD_REQUEST (CHECK_FORMAT)",
     ERR_401: "🔒 AI_ERR: INVALID_API_KEY",
     ERR_429: "🚫 AI_LIMIT: RATE_LIMIT_EXCEEDED",
@@ -102,7 +112,7 @@ export const ATC_CONFIG = {
     ERR_GENERIC: (msg: string) => `❌ AI_ERR: ${msg}`,
   },
 
-  // 자율 주행 레벨
+  
   LEVELS: {
     NORMAL: Number(import.meta.env?.VITE_LEVEL_NORMAL) || 30,
     CAUTION: Number(import.meta.env?.VITE_LEVEL_CAUTION) || 70,

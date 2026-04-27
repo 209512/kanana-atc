@@ -1,4 +1,3 @@
-// src/components/command/CommandCenter.tsx
 import React, { useRef, useState } from 'react';
 import clsx from 'clsx';
 import { Send, Brain, Mic, MicOff, Loader2, Image as ImageIcon, X } from 'lucide-react';
@@ -9,29 +8,37 @@ import { Tooltip } from '@/components/common/Tooltip';
 import { useSTT } from '@/hooks/system/useSTT';
 
 export const CommandCenter = () => {
-    const { isDark } = useUIStore();
+    const isDark = useUIStore(s => s.isDark);
     const openKananaKeyModal = useUIStore(s => s.openKananaKeyModal);
     const isAiMode = useATCStore(s => s.isAiMode);
     const { inputValue, setInputValue, isAnalyzing, handleAnalyze, attachedImage, setAttachedImage } = useCommandCenter();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const [baseInputValue, setBaseInputValue] = useState("");
 
+    const resetTextareaHeight = () => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.overflowY = 'hidden';
+        }
+    };
+
     const checkAndExecute = (action: () => void) => {
-        // 클라이언트 스토리지가 아닌, API가 먼저 호출된 뒤 서버의 401(Missing Key) 응답을 받았을 때 모달을 띄우는 것이 안전합니다.
-        // 현재는 환경변수로 키가 주입된 상황을 지원하기 위해, 클라이언트 키 검증을 생략하고 즉시 실행합니다.
+        
+        
         action();
     };
 
     const { isListening, toggleListening, hasSupport } = useSTT((text) => {
-        // 기존에 타이핑된 텍스트(baseInputValue) 뒤에 음성 인식 텍스트를 이어붙임
+        
         setInputValue(baseInputValue ? `${baseInputValue} ${text}` : text);
     });
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey && isAiMode) { 
             e.preventDefault();
-            setBaseInputValue(""); // 전송 시 베이스 초기화
+            setBaseInputValue(""); 
             handleAnalyze();
         }
     };
@@ -41,7 +48,33 @@ export const CommandCenter = () => {
         if (file) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                setAttachedImage(reader.result as string);
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800;
+                    const MAX_HEIGHT = 800;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx?.drawImage(img, 0, 0, width, height);
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                    setAttachedImage(compressedBase64);
+                };
+                img.src = reader.result as string;
             };
             reader.readAsDataURL(file);
         }
@@ -61,7 +94,7 @@ export const CommandCenter = () => {
                 isListening ? "ring-2 ring-red-500/50 border-red-500/50 bg-red-500/5" : 
                 (isDark ? "bg-zinc-900/80 border-white/10 shadow-black/40" : "bg-white/90 border-slate-300 shadow-xl shadow-slate-200/50")
             )}>
-                {/* 상태 표시기 */}
+                {/* Status Indicator */}
                 <div className={clsx(
                     "absolute -top-3 left-6 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition-all z-10 select-none",
                     !isAiMode ? "bg-zinc-800 text-zinc-500" :
@@ -71,17 +104,18 @@ export const CommandCenter = () => {
                 )}>
                     <Tooltip content={!isAiMode ? "System Link Offline" : "AI Core Active"} position="top">
                         <span>
-                            {!isAiMode ? "AI_LINK_OFFLINE" : isAnalyzing ? "Kanana-O Analyzing..." : isListening ? "Listening..." : "Ready for Command"}
+                            {!isAiMode ? "AI_LINK_OFFLINE" : isAnalyzing ? "시스템을 분석 중입니다..." : isListening ? "Listening..." : "Ready for Command"}
                         </span>
                     </Tooltip>
                 </div>
 
-                {/* Analyze 버튼 */}
+                {/* Analyze Button */}
                 <Tooltip content="Analyze Strategic Command (Enter)" position="top">
                     <button
                         onClick={() => checkAndExecute(() => {
-                            setBaseInputValue(""); // 전송 시 베이스 초기화
+                            setBaseInputValue(""); 
                             handleAnalyze();
+                            resetTextareaHeight();
                         })}
                         disabled={!isAiMode || isAnalyzing || isListening}
                         className={clsx(
@@ -90,12 +124,12 @@ export const CommandCenter = () => {
                             isAnalyzing ? "bg-sky-500/20 text-sky-400 cursor-wait" : "bg-sky-500 hover:bg-sky-400 text-white active:scale-95 disabled:opacity-50"
                         )}
                     >
-                        <Brain size={16} />
-                        <span className="hidden sm:inline">ANALYZE</span>
+                        {isAnalyzing ? <Loader2 size={16} className="animate-spin" /> : <Brain size={16} />}
+                        <span className="hidden sm:inline">{isAnalyzing ? "PROCESSING..." : "ANALYZE"}</span>
                     </button>
                 </Tooltip>
 
-                {/* 입력창 */}
+                {/* Input Field */}
                 <div className="flex-1 relative flex items-center">
                     {attachedImage && (
                         <div className="relative shrink-0 mr-2">
@@ -109,11 +143,12 @@ export const CommandCenter = () => {
                         </div>
                     )}
                     <textarea
+                        ref={textareaRef}
                         value={inputValue}
                         onChange={(e) => {
                             setInputValue(e.target.value);
                             if (!isListening) {
-                                setBaseInputValue(e.target.value); // 타이핑할 때마다 베이스 갱신
+                                setBaseInputValue(e.target.value); 
                             }
                             e.target.style.height = 'auto'; // Reset before measuring
                             const newHeight = Math.min(Math.max(e.target.scrollHeight, 40), 120);
@@ -124,15 +159,13 @@ export const CommandCenter = () => {
                             if (e.key === 'Enter' && !e.shiftKey && isAiMode) { 
                                 e.preventDefault();
                                 checkAndExecute(() => {
-                                    setBaseInputValue(""); // 전송 시 베이스 초기화
+                                    setBaseInputValue(""); 
                                     handleAnalyze();
-                                    // Reset height after analyze
-                                    e.currentTarget.style.height = 'auto';
-                                    e.currentTarget.style.overflowY = 'hidden';
+                                    resetTextareaHeight();
                                 });
                             }
                         }}
-                        placeholder={!isAiMode ? "System Link Offline..." : isListening ? "Listening..." : "Enter strategic command..."}
+                        placeholder={!isAiMode ? "System Link Offline..." : isListening ? "Listening..." : isAnalyzing ? "현재 시스템을 분석 중입니다..." : "Enter strategic command..."}
                         disabled={!isAiMode || isAnalyzing}
                         rows={1}
                         className={clsx(
@@ -146,18 +179,18 @@ export const CommandCenter = () => {
                     />
                 </div>
 
-                {/* 첨부파일 및 STT */}
+                {/* Attachments & STT */}
                 <div className="flex items-center gap-1 pr-1">
                     <Tooltip content="Attach Image" position="top">
                         <button 
                             onClick={() => fileInputRef.current?.click()}
                             disabled={!isAiMode || isAnalyzing}
                             className={clsx(
-                                "p-2.5 rounded-lg transition-all",
+                                "p-3 md:p-2.5 rounded-lg transition-all", 
                                 !isAiMode ? "text-zinc-800" : "text-zinc-500 hover:bg-black/5 hover:text-sky-500"
                             )}
                         >
-                            <ImageIcon size={18} />
+                            <ImageIcon size={20} className="md:w-[18px] md:h-[18px]" />
                         </button>
                     </Tooltip>
                     <input 
@@ -171,14 +204,14 @@ export const CommandCenter = () => {
                     {hasSupport && (
                         <Tooltip content={isListening ? "Stop STT" : "Start Voice Input"} position="top">
                             <button 
-                                onClick={toggleListening}
+                                onClick={() => toggleListening()}
                                 disabled={!isAiMode}
                                 className={clsx(
-                                    "p-2.5 rounded-lg transition-all",
+                                    "p-3 md:p-2.5 rounded-lg transition-all", 
                                     !isAiMode ? "text-zinc-800" : isListening ? "bg-red-500 text-white shadow-lg" : "text-zinc-500 hover:bg-black/5"
                                 )}
                             >
-                                {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+                                {isListening ? <MicOff size={20} className="md:w-[18px] md:h-[18px]" /> : <Mic size={20} className="md:w-[18px] md:h-[18px]" />}
                             </button>
                         </Tooltip>
                     )}

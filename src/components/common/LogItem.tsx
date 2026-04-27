@@ -1,4 +1,3 @@
-// src/components/common/LogItem.tsx
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import ReactMarkdown from 'react-markdown';
@@ -9,7 +8,7 @@ import { Copy, Check, ShieldAlert, AlertTriangle, Info, Zap } from 'lucide-react
 import { useUIStore } from '@/store/useUIStore';
 
 interface LogItemProps {
-    log: LogEntry; displayMessage?: string; isDark: boolean; showTimestamp?: boolean; compact?: boolean; onClick?: (agentId: string) => void;
+    log: LogEntry; displayMessage?: string | React.ReactNode; isDark: boolean; showTimestamp?: boolean; compact?: boolean; onClick?: (agentId: string) => void;
 }
 
 export const LogItem = React.memo(({ log, displayMessage, isDark, showTimestamp = true, compact = false, onClick }: LogItemProps) => {
@@ -52,7 +51,12 @@ export const LogItem = React.memo(({ log, displayMessage, isDark, showTimestamp 
 
     const handleCopy = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
-        navigator.clipboard.writeText(messageToRender);
+        // NOTE: Mask UUID when copying to clipboard
+        const safeMessageToCopy = typeof messageToRender === 'string' ? messageToRender.replace(
+            /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g, 
+            '[HIDDEN_ID]'
+        ) : 'Cannot copy React elements';
+        navigator.clipboard.writeText(safeMessageToCopy);
         setCopied(true);
         if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
         copyTimeoutRef.current = setTimeout(() => { setCopied(false); setShowContext(false); }, 1500);
@@ -65,14 +69,14 @@ export const LogItem = React.memo(({ log, displayMessage, isDark, showTimestamp 
     }, []);
 
     const renderTextWithBadges = (text: string) => {
-        // [CONDITION:xxx], [RISK_LEVEL:x], [STRATEGY:xxx], UUID 등 매칭 정규식
-        // 보안/UI 요구사항: UUID(예: 123e4567-e89b-12d3-a456-426614174000 등)가 노출되지 않도록 마스킹
+        // NOTE: Regex for CONDITION, RISK_LEVEL, STRATEGY, UUID
+        // NOTE: Mask UUID to prevent exposure
         const badgeRegex = /(\[CONDITION:[^\]]+\]|\[RISK_LEVEL:[^\]]+\]|\[STRATEGY:[^\]]+\]|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/g;
         
         const parts = text.split(badgeRegex);
         
         return parts.map((part, index) => {
-            // UUID 마스킹 처리 (UI 노출 방지)
+            // NOTE: UUID masking
             if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(part)) {
                 return <span key={index} className="inline align-middle text-gray-500 italic">[HIDDEN_ID]</span>;
             }
@@ -151,7 +155,7 @@ export const LogItem = React.memo(({ log, displayMessage, isDark, showTimestamp 
             {showTimestamp && <span className="opacity-30 font-mono shrink-0 select-none text-[0.85em] mt-0.5">{timeStr}</span>}
             <span className={clsx("font-mono font-black shrink-0 select-none mt-0.5 min-w-[35px]", style.className)}>{style.tag}</span>
 
-            {/* select-text. 드래그 복사 */}
+            {/* Selectable text for copy-paste */}
             <div data-testid="log-message" 
                 className="font-mono flex-1 tracking-tight break-words whitespace-pre-wrap leading-relaxed select-text overflow-hidden relative transition-all"
                 style={{ fontSize: compact ? '9px' : `${terminalFontSize}px` }}
@@ -181,14 +185,14 @@ export const LogItem = React.memo(({ log, displayMessage, isDark, showTimestamp 
                                 a: ({ node, ...props }) => (
                                     <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300 transition-colors" />
                                 ),
-                                img: () => null // 보안: 외부 이미지 로드 차단
+                                img: () => null // NOTE: Block external image loading for security
                             }}
                         >
-                            {messageToRender.replace(/\n\s*\n/g, '\n')}
+                            {typeof messageToRender === 'string' ? messageToRender.replace(/\n\s*\n/g, '\n') : ''}
                         </ReactMarkdown>
                     </div>
                 ) : (
-                    <span className="inline leading-snug">{renderTextWithBadges(messageToRender)}</span>
+                    <span className="inline leading-snug">{typeof messageToRender === 'string' ? renderTextWithBadges(messageToRender) : messageToRender}</span>
                 )}
                 {/* Typing Cursor indicator if the log is recent and still receiving chunks. */}
                 {isTyping && (
