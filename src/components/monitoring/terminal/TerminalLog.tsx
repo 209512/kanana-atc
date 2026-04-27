@@ -1,4 +1,3 @@
-// src/components/monitoring/terminal/TerminalLog.tsx
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import Draggable from 'react-draggable';
 import clsx from 'clsx';
@@ -19,7 +18,7 @@ export const TerminalLog = () => {
   const toggleAdminMute = useATCStore(s => s.toggleAdminMute);
   const isAiMode = useATCStore(s => s.isAiMode);
 
-  // 윈도우 사이즈 변경 시 Draggable position 리셋을 위해 key 변경용 state 추가
+  // NOTE: State to reset Draggable position on window resize
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   useEffect(() => {
       const handleResizeWindow = () => setWindowWidth(window.innerWidth);
@@ -30,7 +29,7 @@ export const TerminalLog = () => {
   const isDark = useUIStore(s => s.isDark);
   const sidebarWidth = useUIStore(s => s.sidebarWidth);
   const isTerminalOpen = useUIStore(s => s.isTerminalOpen);
-  const { streamingText } = useCommandCenter();
+  const { streamingText, isAnalyzing } = useCommandCenter();
   
   const [filter, setFilter] = useState('ALL');
   const [excludedTypes, setExcludedTypes] = useState<string[]>([]);
@@ -41,19 +40,32 @@ export const TerminalLog = () => {
 
   const [isResizing, setIsResizing] = useState(false);
 
+  // NOTE: State to prevent render lag during drag
+  const [isDragging, setIsDragging] = useState(false);
+
   const handleResize = useCallback((e: MouseEvent) => {
     if (!nodeRef.current) return;
     const rect = nodeRef.current.getBoundingClientRect();
-    setDimensions({
-      width: Math.max(230, e.clientX - rect.left),
-      height: Math.max(140, e.clientY - rect.top)
-    });
+    
+    // NOTE: Prevent re-rendering during resize by manipulating DOM directly
+    const newWidth = Math.max(230, e.clientX - rect.left);
+    const newHeight = Math.max(140, e.clientY - rect.top);
+    nodeRef.current.style.width = `${newWidth}px`;
+    nodeRef.current.style.height = `${newHeight}px`;
   }, []);
 
   useEffect(() => {
     const stopResizing = () => {
       setIsResizing(false);
       document.body.style.cursor = 'default';
+      
+      // NOTE: Update React state with final DOM dimensions to prevent reset on re-render
+      if (nodeRef.current) {
+        setDimensions({
+          width: parseInt(nodeRef.current.style.width || String(dimensions.width), 10),
+          height: parseInt(nodeRef.current.style.height || String(dimensions.height), 10)
+        });
+      }
     };
 
     if (isResizing) {
@@ -78,12 +90,22 @@ export const TerminalLog = () => {
     const map: Record<string, string> = {
       'USER': 'USER',
       'SYSTEM': 'SYSTEM',
-      'ADMIN': 'ADMIN'
+      'ADMIN': 'ADMIN',
+      'POLICY': 'POLICY'
     };
     agents.forEach(a => {
-      if (a.uuid) {
-        map[a.uuid] = a.displayName || a.id;
+      // NOTE: Prioritize short displayId, then displayName, then name
+      let name = a.displayId || a.displayName || a.name;
+      
+      // NOTE: If no name is set, and original id is UUID
+      // NOTE: Prevent UUID exposure by falling back to agentName or Unknown
+      if (!name && a.id) {
+        name = a.id; // NOTE: Used for mapping only, filtered out during render
       }
+      
+      // NOTE: Map UUIDs and IDs to pretty names for log message replacement
+      if (a.uuid) map[a.uuid] = name as string;
+      if (a.id) map[a.id] = name as string;
     });
     return map;
   }, [agents]);
@@ -100,33 +122,48 @@ export const TerminalLog = () => {
       });
     }
     
-    // Memoize the UUID replacements to avoid expensive string operations on every render
-    return results.slice(-ATC_CONFIG.LOGS.MAX_DISPLAY).map(log => {
-      let cleanMessage = log.message;
-      Object.entries(agentNameMap).forEach(([uuid, name]) => {
-        if (uuid && uuid !== 'SYSTEM' && uuid !== 'USER' && uuid !== 'ADMIN') {
-          cleanMessage = cleanMessage.split(uuid).join(name);
-        }
-      });
-      return { ...log, cleanMessage };
-    });
-  }, [logs, filter, excludedTypes, agentNameMap]);
+    // NOTE: Return raw data without UUID replacement (string ops done in LogItem)
+    return results.slice(-ATC_CONFIG.LOGS.MAX_DISPLAY);
+  }, [logs, filter, excludedTypes]);
 
   const lastLogId = filteredLogs.length > 0 ? filteredLogs[filteredLogs.length - 1].id : null;
   const { scrollRef, autoScroll, setAutoScroll, handleScroll } = useTerminalScroll(lastLogId, isCollapsed, streamingText);
 
-  const currentTheme = (isAiMode || filter === 'insight') ? THEME_COLORS.insight : 
-                       filter === 'proposal' ? THEME_COLORS.proposal : 
-                       filter === 'exec' ? THEME_COLORS.exec : null;
+  const saveLogs = useCallback(() => {
+    const logData = logs.map(l => `[${new Date(l.timestamp).toISOString()}] [${l.type.toUpperCase()}] ${l.agentName || l.agentId || 'SYSTEM'}: ${l.message}`).join('\n');
+    const blob = new Blob([logData], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kanana_atc_logs_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [logs]);
+
+  const currentTheme = filter === 'proposal' ? THEME_COLORS.proposal : 
+                       filter === 'exec' ? THEME_COLORS.exec : 
+                       (isAiMode || filter === 'insight') ? THEME_COLORS.insight : null;
 
   if (!isTerminalOpen) return null;
 
   return (
-    <Draggable key={windowWidth} nodeRef={nodeRef} handle=".handle" bounds="body" disabled={windowWidth < 768}>
+    <Draggable 
+      key={windowWidth} 
+      nodeRef={nodeRef} 
+      handle=".handle" 
+      bounds="body" 
+      disabled={windowWidth < 768}
+      onStart={() => setIsDragging(true)}
+      onStop={() => setIsDragging(false)}
+    >
       <div 
         ref={nodeRef} 
         className={clsx(
-          "fixed z-50 flex flex-col font-mono pointer-events-auto touch-none transition-[width,height,filter,box-shadow]",
+          "fixed z-50 flex flex-col font-mono pointer-events-auto touch-none",
+          // NOTE: Apply transition only when not dragging to prevent lag
+          !isDragging && "transition-[width,height,filter,box-shadow]",
           windowWidth < 768 && "!bottom-[120px] !top-auto !left-2 !right-2 !w-auto !rounded-2xl ![transform:none]"
         )}
         style={
@@ -151,7 +188,7 @@ export const TerminalLog = () => {
             isDark={isDark} filter={filter} isAiMode={isAiMode} isCollapsed={isCollapsed}
             autoScroll={autoScroll} isAdminMuted={isAdminMuted}
             setFilter={setFilter} setIsCollapsed={setIsCollapsed} setAutoScroll={setAutoScroll}
-            toggleAdminMute={toggleAdminMute} saveLogs={() => {}}
+            toggleAdminMute={toggleAdminMute} saveLogs={saveLogs}
           />
 
           {!isCollapsed && (
@@ -177,16 +214,44 @@ export const TerminalLog = () => {
                 style={{ overflowAnchor: 'none' }}
               >
                 <div className="flex flex-col w-full min-h-full">
-                  {filteredLogs.map((log) => (
-                    <LogItem 
-                      key={log.id} log={log} isDark={isDark} 
-                      displayMessage={
-                          log.agentId && log.agentId !== 'SYSTEM' && log.agentName
-                            ? `[${log.agentName}] ${log.cleanMessage}`
-                            : log.cleanMessage
+                  {filteredLogs.map((log) => {
+                    // NOTE: Perform string ops only at render time (LogItem handles memoization)
+                    let cleanMessage = log.message;
+                    Object.entries(agentNameMap).forEach(([uuid, name]) => {
+                      if (uuid && !['SYSTEM', 'USER', 'ADMIN', 'POLICY'].includes(uuid.toUpperCase())) {
+                        // NOTE: Use case-insensitive regex to prevent [HIDDEN_ID] issues
+                        const regex = new RegExp(uuid, 'gi');
+                        cleanMessage = cleanMessage.replace(regex, name);
                       }
-                    />
-                  ))}
+                    });
+                    
+                    // NOTE: Defensive code for lowercase agentId
+                    let mappedName = log.agentId;
+                    if (log.agentId && !['SYSTEM', 'USER', 'ADMIN', 'POLICY'].includes(log.agentId.toUpperCase())) {
+                      const foundName = Object.entries(agentNameMap).find(([k]) => k.toLowerCase() === log.agentId?.toLowerCase())?.[1];
+                      mappedName = foundName || log.agentName;
+                      
+                      // NOTE: If it's still missing and it's a Kanana AI response, fall back to SYSTEM
+                      if (!mappedName || mappedName === 'Agent-Unknown') {
+                        if (log.type === 'insight' || log.type === 'exec' || log.type === 'proposal') {
+                          mappedName = 'SYSTEM'; 
+                        } else {
+                          mappedName = 'Agent-Unknown'; // NOTE: Never expose UUID
+                        }
+                      }
+                    }
+
+                    return (
+                      <LogItem 
+                        key={log.id} log={log} isDark={isDark} 
+                        displayMessage={
+                            mappedName
+                              ? `[${mappedName}] ${cleanMessage}`
+                              : cleanMessage
+                        }
+                      />
+                    );
+                  })}
                   
                   {streamingText && (
                     <LogItem 
@@ -194,6 +259,14 @@ export const TerminalLog = () => {
                       log={{ id: 'streaming-log', type: 'insight', timestamp: 0, message: streamingText }}
                       isDark={isDark}
                       displayMessage={streamingText}
+                    />
+                  )}
+                  {isAnalyzing && !streamingText && (
+                    <LogItem 
+                      key="analyzing-log"
+                      log={{ id: 'analyzing-log', type: 'insight', timestamp: 0, message: 'AI is analyzing the situation...' }}
+                      isDark={isDark}
+                      displayMessage={<span className="flex items-center gap-2 opacity-70"><span className="animate-pulse w-2 h-2 bg-sky-500 rounded-full" />AI 모델이 전술 데이터를 분석 중입니다...</span>}
                     />
                   )}
                 </div>

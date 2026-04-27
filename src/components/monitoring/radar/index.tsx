@@ -1,4 +1,3 @@
-// src/components/monitoring/radar/index.tsx
 import React, { Suspense, useCallback, useMemo, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
@@ -13,14 +12,16 @@ import { useAgentMutations } from '@/hooks/api/useAgentMutations';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 
-// 3D 에셋 지연 로딩 (Lazy Loading) 적용
+
+import { createPortal } from 'react-dom';
+
 const AgentDrone = React.lazy(() => import('@/components/monitoring/radar/AgentDrone').then(m => ({ default: m.AgentDrone })));
 const RadarBackground = React.lazy(() => import('@/components/monitoring/radar/RadarBackground').then(m => ({ default: m.RadarBackground })));
 const CentralHub = React.lazy(() => import('@/components/monitoring/radar/CentralHub').then(m => ({ default: m.CentralHub })));
 const AgentDetailPopup = React.lazy(() => import('@/components/monitoring/radar/AgentDetailPopup').then(m => ({ default: m.AgentDetailPopup })));
 const CameraController = React.lazy(() => import('@/components/monitoring/radar/CameraController').then(m => ({ default: m.CameraController })));
 
-// Scene Cleanup Component to prevent WebGL memory leaks
+// NOTE: Scene Cleanup Component to prevent WebGL memory leaks
 const SceneCleanup = ({ isDark }: { isDark: boolean }) => {
     const { scene, gl } = useThree();
     
@@ -34,10 +35,10 @@ const SceneCleanup = ({ isDark }: { isDark: boolean }) => {
         
         return () => {
             gl.domElement.removeEventListener('webglcontextlost', onContextLost);
-            // WebGL 렌더러의 모든 내부 리소스 정리 (메모리 누수 방지)
-            // gl.dispose(); // R3F가 자체적으로 WebGL context를 관리하므로 수동 dispose 시 HMR(Hot Module Replacement) 중 하얀 화면 발생 위험
             
-            // 대신, Scene 내부의 모든 mesh 자원을 순회하며 확실하게 해제
+            
+            
+            
             scene.traverse((object: any) => {
                 if (!object.isMesh) return;
                 if (object.geometry) {
@@ -60,10 +61,10 @@ const SceneCleanup = ({ isDark }: { isDark: boolean }) => {
     return null;
 };
 
-// Fallback UI for a crashed individual AgentDrone
+// NOTE: Fallback UI for a crashed individual AgentDrone
 const AgentDroneFallback = ({ agentId, isDark }: { agentId: string, isDark: boolean }) => {
-    // Determine static position based on agentId to keep the fallback in place
-    // Extracting numbers from UUID to simulate position deterministic behavior
+    // NOTE: Determine static position based on agentId to keep the fallback in place
+    // NOTE: Extracting numbers from UUID to simulate position deterministic behavior
     const seed = parseInt(agentId.replace(/[^0-9]/g, '').slice(0, 4) || '1') || 1;
     const radius = 5 + (seed % 3) * 2.8;
     const angle = seed * (Math.PI * 2 / 5);
@@ -110,11 +111,12 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
 
     return (
         <div 
-            className="w-full h-full relative overflow-hidden transition-colors duration-500" 
+            className="w-full h-full relative overflow-hidden transition-colors duration-500 radar-canvas" 
             style={{ backgroundColor: isDark ? "#050505" : "#f8fafc" }}
-            onContextMenu={(e) => e.preventDefault()} // 브라우저 기본 우클릭 메뉴 방지
+            onContextMenu={(e) => e.preventDefault()} 
         >
             <Canvas 
+                className="radar-canvas"
                 gl={{ 
                     antialias: false, 
                     powerPreference: "high-performance", 
@@ -173,7 +175,7 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
                                 isGlobalStopped={!!globalStop}
                                 isForced={forcedCandidate === agent.id}
                                 isAiProposed={Array.from(pendingProposals?.values() || []).some(
-                                    p => p.targetId === agent.id || p.targetId === agent.uuid || p.targetId === agent.displayId
+                                    p => p.targetId === agent.id || p.targetId === agent.uuid || p.targetId === agent.displayId || p.targetId === (agent.name || '').toUpperCase() || p.targetId === (agent.displayName || '').toUpperCase()
                                 )}
                                 isAdminMuted={isAdminMuted}
                                 onClick={setSelectedAgentId}
@@ -185,25 +187,28 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
                 </Suspense>
             </Canvas>
             
-            {/* 고정된 UI 오버레이: 카메라 트래킹을 하지 않으므로 3D 공간을 벗어나 2D DOM에 렌더링 */}
+            {/* Static UI Overlay: Rendered via Portal to break out of 3D Canvas z-index context and prevent mobile UI overlap */}
             {selectedAgentId && agents.find(a => a.id === selectedAgentId || a.uuid === selectedAgentId || a.displayId === selectedAgentId) && (
-                <div className="absolute inset-0 z-50 pointer-events-none w-full h-full">
-                    <Suspense fallback={null}>
-                        <AgentDetailPopup 
-                            agent={agents.find(a => a.id === selectedAgentId || a.uuid === selectedAgentId || a.displayId === selectedAgentId)} 
-                            onClose={() => setSelectedAgentId(null)} 
-                            isDark={isDark}
-                            isCompact={compact}
-                            onTerminate={actions.terminateAgent}
-                            onTogglePriority={actions.togglePriority}
-                            onTransferLock={actions.transferLock}
-                            onTogglePause={actions.togglePause}
-                        />
-                    </Suspense>
-                </div>
+                typeof document !== 'undefined' ? createPortal(
+                    <div className="absolute inset-0 z-[100] pointer-events-none w-full h-full overflow-hidden">
+                        <Suspense fallback={null}>
+                            <AgentDetailPopup 
+                                agent={agents.find(a => a.id === selectedAgentId || a.uuid === selectedAgentId || a.displayId === selectedAgentId)} 
+                                onClose={() => setSelectedAgentId(null)} 
+                                isDark={isDark}
+                                isCompact={compact}
+                                onTerminate={actions.terminateAgent}
+                                onTogglePriority={actions.togglePriority}
+                                onTransferLock={actions.transferLock}
+                                onTogglePause={actions.togglePause}
+                            />
+                        </Suspense>
+                    </div>,
+                    document.getElementById('atc-dashboard') || document.body
+                ) : null
             )}
             
-            {/* A11yAnnouncer는 React 18 Strict Mode 및 HMR 환경에서 "Cannot update an unmounted root" 에러를 유발하므로 제거 또는 대체 (기능상 불필요) */}
+            {/* NOTE: Removed A11yAnnouncer as it causes "Cannot update an unmounted root" errors in React 18 Strict Mode and HMR */}
             {/* <A11yAnnouncer /> */}
         </div>
     );

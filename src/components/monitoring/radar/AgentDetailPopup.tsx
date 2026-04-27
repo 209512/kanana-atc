@@ -1,6 +1,6 @@
-// src/components/monitoring/radar/AgentDetailPopup.tsx
 import React, { useState } from 'react';
-import { X, Pause, Activity, Cpu, Database, Edit2, Save } from 'lucide-react'; 
+import { X, Pause, Activity, Cpu, Database, Edit2, Save } from 'lucide-react';
+import Draggable from 'react-draggable'; 
 import clsx from 'clsx';
 import { useTranslation } from 'react-i18next';
 import { Agent } from '@/contexts/atcTypes';
@@ -34,14 +34,18 @@ export const AgentDetailPopup = ({
     const { onTogglePause, onTransferLock, togglePriority, terminateAgent } = useTacticalActions();
     const { isPaused, isForced, statusLabel, isLocked } = useAgentLogic(agent as Agent, state);
     const { updateAgentConfig } = useAgentMutations();
-    const { sidebarWidth, isSidebarCollapsed } = useUIStore();
+    const sidebarWidth = useUIStore(s => s.sidebarWidth);
+    const isSidebarCollapsed = useUIStore(s => s.isSidebarCollapsed);
     
     const [isVisible, setIsVisible] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editPersona, setEditPersona] = useState('');
 
+    const [isDragging, setIsDragging] = useState(false);
+    const nodeRef = React.useRef<HTMLDivElement>(null);
+
     React.useEffect(() => {
-        setIsVisible(true); // 딜레이 없이 즉시 노출
+        setIsVisible(true); 
     }, [agent?.id]);
 
     React.useEffect(() => {
@@ -62,54 +66,58 @@ export const AgentDetailPopup = ({
     const actualSidebarWidth = isSidebarCollapsed ? 64 : sidebarWidth;
 
     return (
-        <div 
-            className={clsx(
-                "absolute z-[100] p-4 rounded-lg border shadow-2xl backdrop-blur-xl transition-all duration-300 select-none",
-                "pointer-events-auto flex flex-col",
-                isCompact ? "w-56 scale-90 origin-top-right" : "w-64",
-                isForced ? "ring-2 ring-purple-500 bg-purple-900/20" : 
-                (isDark ? "bg-[#0d1117]/95 border-gray-700 text-gray-300" : "bg-white/95 border-slate-300 text-slate-700")
-            )}
-            style={{ 
-                right: isCompact ? '80px' : `calc(${actualSidebarWidth}px + 80px)`, 
-                top: '48px' 
-            }}
-            onPointerDown={(e) => { e.stopPropagation(); }}
-            onPointerUp={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); }}
-            onWheel={(e) => e.stopPropagation()}
-        >
-            <div className="flex justify-between items-center mb-3 border-b pb-3 border-gray-500/20">
-                <div className="flex items-center gap-2 overflow-hidden w-full max-w-[200px]">
-                    <Activity size={14} className="shrink-0" style={{ color: isLocked ? LOG_LEVELS.success.color : LOG_LEVELS.info.color }} />
-                    <span className="font-black text-xs font-mono tracking-tighter truncate">
-                        {agent.displayId || agent.id}
-                    </span>
-                    {(agent as any).provider === 'gemini' && (
-                        (agent as any).state?.isTactical ? (
-                            <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-red-500/20 text-red-400 border border-red-500/50 rounded animate-pulse font-bold">
-                                TACTICAL
-                            </span>
-                        ) : (
-                            <span className="ml-1 text-[10px] px-1 py-0.5 bg-blue-500/20 text-blue-400 rounded">
-                                AI
-                            </span>
-                        )
-                    )}
-                    {isPaused && <Pause size={10} className="animate-pulse shrink-0" style={{ color: LOG_LEVELS.system.color }} />}
+        <Draggable nodeRef={nodeRef} bounds="parent" handle=".drag-handle" onStart={() => setIsDragging(true)} onStop={() => setIsDragging(false)}>
+            <div 
+                ref={nodeRef}
+                className={clsx(
+                    "absolute z-[100] rounded-lg border shadow-2xl backdrop-blur-xl select-none",
+                    "pointer-events-auto flex flex-col",
+                    !isDragging && "transition-[transform,filter,box-shadow,opacity] duration-300",
+                    isCompact ? "w-56 scale-90 origin-top-right" : "w-64",
+                    isForced ? "ring-2 ring-purple-500 bg-purple-900/20" : 
+                    (isDark ? "bg-[#0d1117]/95 border-gray-700 text-gray-300" : "bg-white/95 border-slate-300 text-slate-700")
+                )}
+                style={{ 
+                    // NOTE: Responsive positioning to prevent off-screen overflow
+                    right: typeof window !== 'undefined' && window.innerWidth < 768 ? '16px' : (isCompact ? '80px' : `calc(${actualSidebarWidth}px + 80px)`), 
+                    top: '48px',
+                    maxWidth: 'calc(100vw - 32px)' // Ensure it never exceeds screen width
+                }}
+            >
+                {/* Drag Handle Area */}
+                <div className="drag-handle flex justify-between items-center p-4 pb-2 cursor-move border-b border-gray-500/20">
+                    <div className="flex items-center gap-2 overflow-hidden w-full max-w-[200px]">
+                        <Activity size={14} className="shrink-0" style={{ color: isLocked ? LOG_LEVELS.success.color : LOG_LEVELS.info.color }} />
+                        <span className="font-black text-xs font-mono tracking-tighter truncate">
+                            {agent.displayId || agent.id}
+                        </span>
+                        {(agent as any).provider === 'gemini' && (
+                            (agent as any).state?.isTactical ? (
+                                <span className="ml-1 text-[10px] px-1.5 py-0.5 bg-red-500/20 text-red-400 border border-red-500/50 rounded animate-pulse font-bold">
+                                    TACTICAL
+                                </span>
+                            ) : (
+                                <span className="ml-1 text-[10px] px-1 py-0.5 bg-blue-500/20 text-blue-400 rounded">
+                                    AI
+                                </span>
+                            )
+                        )}
+                        {isPaused && <Pause size={10} className="animate-pulse shrink-0" style={{ color: LOG_LEVELS.system.color }} />}
+                    </div>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onClose(); }} 
+                        className="hover:text-red-500 transition-colors ml-2 shrink-0 p-1 flex items-center justify-center cursor-pointer rounded-md hover:bg-gray-500/20"
+                        aria-label="Close details"
+                        onPointerDown={(e) => e.stopPropagation()} // Prevent drag when clicking close
+                    >
+                        <X size={16} />
+                    </button>
                 </div>
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onClose(); }} 
-                    className="hover:text-red-500 transition-colors ml-2 shrink-0 p-1 flex items-center justify-center cursor-pointer rounded-md hover:bg-gray-500/20"
-                    aria-label="Close details"
-                >
-                    <X size={16} />
-                </button>
-            </div>
 
-            <div className="mb-3">
-                <AgentMetrics isDark={isDark} agent={agent} />
-            </div>
+                <div className="p-4 pt-2">
+                    <div className="mb-3">
+                        <AgentMetrics isDark={isDark} agent={agent} />
+                    </div>
 
             <div className="space-y-1.5 text-[10px] font-mono mb-4">
                 <div className="flex justify-between items-center">
@@ -136,7 +144,7 @@ export const AgentDetailPopup = ({
                             <span className="text-gray-400 truncate max-w-[110px]">{agent.model || 'DEFAULT'}</span>
                         </div>
 
-                        {/* Gemini 확장 텔레메트리 (온도, 습도) */}
+                        {/* Custom Telemetry (Gemini) */}
                         {(agent as any).state?.temp !== undefined && (
                             <div className="flex justify-between items-center border-t border-gray-500/20 pt-1 mt-1">
                                 <span className="opacity-50">Temp</span>
@@ -164,7 +172,7 @@ export const AgentDetailPopup = ({
                             {isEditing ? (
                                 <textarea 
                                     className={clsx(
-                                        "w-full h-20 text-[11px] p-2 rounded resize-none outline-none focus:ring-1 focus:ring-blue-500",
+                                        "w-full h-20 text-[11px] p-2 rounded resize-none outline-none focus:ring-1 focus:ring-blue-500 custom-scrollbar",
                                         isDark ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-800"
                                     )}
                                     value={editPersona}
@@ -181,19 +189,21 @@ export const AgentDetailPopup = ({
                 )}
             </div>
             
-            <div className="pt-3 border-t border-gray-500/20 mt-auto flex justify-end w-full">
-                <AgentActionButtons 
-                    agent={agent} 
-                    state={state}
-                    onTogglePriority={togglePriority}
-                    onTogglePause={onTogglePause}
-                    onTerminate={terminateAgent}
-                    onTransferLock={onTransferLock}
-                    layout="compact"
-                    showLabels={false}
-                    tooltipPosition="top"
-                />
+                    <div className="pt-3 border-t border-gray-500/20 mt-auto flex justify-end w-full">
+                        <AgentActionButtons 
+                            agent={agent} 
+                            state={state}
+                            onTogglePriority={togglePriority}
+                            onTogglePause={onTogglePause}
+                            onTerminate={terminateAgent}
+                            onTransferLock={onTransferLock}
+                            layout="compact"
+                            showLabels={false}
+                            tooltipPosition="top"
+                        />
+                    </div>
+                </div>
             </div>
-        </div>
+        </Draggable>
     );
 };
