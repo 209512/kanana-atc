@@ -1,7 +1,7 @@
 import { SignJWT } from 'jose';
 import { withApiMiddleware } from './_middleware';
 import { logger } from './_logger';
-import { getJwtSecret } from './_utils';
+import { getJwtSecret, getClientIp } from './_utils';
 
 export const config = {
   runtime: 'edge',
@@ -14,23 +14,18 @@ export default async function handler(req: Request) {
     rateLimitMaxRequests: 5,
     rateLimitKeyPrefix: 'init'
   }, async (req, _context) => {
-    // NOTE: Issue JWT token with IP binding
-    const secretKey = getJwtSecret();
-    if (!secretKey) {
-      logger.error("[INIT_API_ERROR] Secret is missing!");
-      return new Response(JSON.stringify({ error: "INTERNAL_SERVER_ERROR", message: "Server configuration error." }), { 
-        status: 500, 
-        headers: { 'Content-Type': 'application/json' } 
-      });
-    }
-
     try {
-      const secret = new TextEncoder().encode(secretKey);
+      const secret = new TextEncoder().encode(getJwtSecret());
       const alg = 'HS256';
-      
-      
+
       const jti = crypto.randomUUID();
-      const clientIp = req.headers.get("x-vercel-forwarded-for")?.split(',')[0].trim() || req.headers.get("x-real-ip")?.trim() || req.headers.get("x-forwarded-for")?.split(',')[0].trim() || "unknown";
+      const clientIp = await getClientIp(req);
+      if (clientIp === "unknown_ip") {
+        return new Response(JSON.stringify({ error: "IP_IDENTIFICATION_FAILED" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
       
       const token = await new SignJWT({ role: 'guest', boundIp: clientIp })
         .setProtectedHeader({ alg })

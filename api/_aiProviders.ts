@@ -1,5 +1,3 @@
-// NOTE: Centralized AI Provider Configuration
-
 export const AI_PROVIDERS = {
   KANANA: {
     API_URL: process.env.KANANA_ENDPOINT || 'https://api.kakaobrain.com/v1/inference/kanana',
@@ -19,7 +17,7 @@ export const AI_PROVIDERS = {
   GEMINI: {
     NAME: 'gemini',
     API_URL: process.env.GEMINI_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/models',
-    DEFAULT_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash', // NOTE: Updated default model to gemini-2.0-flash to prevent 404 on new accounts
+    DEFAULT_MODEL: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
     ACTION: 'generateContent',
   }
 };

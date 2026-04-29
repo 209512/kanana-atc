@@ -20,7 +20,7 @@ const OpenAIPayloadSchema = z.object({
 export default async function handler(req: Request) {
   return withApiMiddleware(req, {
     allowedMethods: ['POST'],
-    requireAuth: true,
+    requireAuth: false,
     rateLimitMaxRequests: 20
   }, async (req) => {
     const agentKeysHeader = req.headers.get('x-agent-keys');
@@ -107,4 +107,3 @@ export default async function handler(req: Request) {
     }
   });
 }
-
