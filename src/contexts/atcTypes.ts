@@ -37,6 +37,16 @@ export interface RiskMetrics {
   load: string;
 }
 
+export interface FieldReport {
+  agentId: string;
+  agentName: string;
+  risk_level: number;
+  condition: 'NORMAL' | 'CAUTION' | 'CRITICAL';
+  strategy: string | null;
+  message: string;
+  ts: number;
+}
+
 export interface Agent {
   id: string;
   uuid: string;
@@ -79,5 +89,4 @@ export interface ATCState {
   trafficIntensity: number;
   pendingProposals: Map<string, AIProposal>;
   handoverTarget: string | null;
-  autonomyLevel: number;
 }

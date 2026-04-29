@@ -19,16 +19,14 @@ export const useAgentSettings = (onClose: () => void) => {
 
     useEffect(() => {
         if (!selectedAgent || selectedAgent === "Select") return;
-        const abortController = new AbortController();
+        let cancelled = false;
 
         const loadConfig = async () => {
             try {
-                const response = await fetch(`${API_URL}/api/agents/${encodeURIComponent(selectedAgent)}/config`, {
-                    signal: abortController.signal
-                });
+                const response = await fetch(`${API_URL}/api/agents/${encodeURIComponent(selectedAgent)}/config`);
 
                 if (response.status === 404) {
-                    if (!abortController.signal.aborted) {
+                    if (!cancelled) {
                         setProvider('mock');
                         setModel('');
                         setSystemPrompt('You are a helpful AI traffic controller.');
@@ -38,21 +36,21 @@ export const useAgentSettings = (onClose: () => void) => {
 
                 if (response.ok) {
                     const data = await response.json();
-                    if (!abortController.signal.aborted) {
+                    if (!cancelled) {
                         setProvider(data.provider || 'mock');
                         setModel(data.model || '');
                         setSystemPrompt(data.systemPrompt || 'You are a helpful AI traffic controller.');
                     }
                 }
             } catch (err: unknown) {
-                if (err instanceof Error && err.name === 'AbortError') return;
+                if (cancelled) return;
                 logger.error("[ATC_SYSTEM] Network connection failed:", err);
             }
         };
         loadConfig();
         
         return () => {
-            abortController.abort();
+            cancelled = true;
         };
     }, [selectedAgent, API_URL]);
 
@@ -68,7 +66,6 @@ export const useAgentSettings = (onClose: () => void) => {
                 uuid: selectedAgent, 
                 config: { provider, model: model.trim(), systemPrompt } 
             });
-            // NOTE: Optional success toast/notification could be added here
         } catch (err) {
             logger.error("SYNC_ERROR:", err);
         } finally {

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { atcApi } from './atcApi';
 
-
 global.fetch = vi.fn() as any;
 
 describe('ATC API Client - Error Handling & Timer Cleanup', () => {

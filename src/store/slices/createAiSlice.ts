@@ -4,6 +4,7 @@ import { atcApi } from '@/contexts/atcApi';
 import { ATC_CONFIG } from '@/constants/atcConfig';
 import { AIProposal } from '@/contexts/atcTypes';
 import { logger } from '@/utils/logger';
+import { isActionAllowedByPolicy } from '@/utils/aiPolicy';
 
 import { atcEventBus } from '@/utils/eventBus';
 
@@ -47,8 +48,6 @@ export const createAiSlice: StateCreator<
 
   toggleAiAutoMode: (val?: boolean) => set((s) => {
     const newValue = val !== undefined ? val : !s.isAiAutoMode;
-    
-    // NOTE: Log the mode change
     if (s.addLog) {
         s.addLog(`AI Autopilot Mode ${newValue ? 'ACTIVATED' : 'DEACTIVATED'}`, newValue ? 'warn' : 'info', 'SYSTEM');
     }
@@ -66,13 +65,40 @@ export const createAiSlice: StateCreator<
     if (!proposalsMap || proposalsMap.size === 0) return;
     
     const proposals = Array.from(proposalsMap.values());
-    
-    // NOTE: Create detailed execution log for each proposal
+
+    if (store.isAiAutoMode) {
+      const { LOG_MSG } = ATC_CONFIG;
+      const actionsUpper = proposals.map((p) => String(p.action || '').toUpperCase());
+      const onlyRecoveryActions = actionsUpper.every((a) => a === 'START' || a === 'RELEASE');
+      const onlyPolicyAllowed = proposals.every((p) => isActionAllowedByPolicy(String(p.action || ''), store.riskScore));
+
+      const blockedByState =
+        !!store.state.handoverTarget ||
+        !!store.state.overrideSignal ||
+        (store.state.globalStop && !onlyRecoveryActions);
+
+      const blockedByRisk = !onlyPolicyAllowed;
+
+      if (blockedByState || blockedByRisk) {
+        const reason = store.state.handoverTarget
+          ? String(store.state.handoverTarget)
+          : store.state.overrideSignal
+            ? 'MANUAL_OVERRIDE_ACTIVE'
+            : store.state.globalStop
+              ? 'GLOBAL_STOP_ACTIVE'
+              : 'ACTION_POLICY_VIOLATION';
+        store.addLog(LOG_MSG.HANDOVER(reason), "warn", "SYSTEM");
+        return;
+      }
+    }
+
     const detailedActions = proposals.map(p => `[${p.action}: ${p.targetId}]`).join(', ');
     store.addLog(`⚙️ AI_EXECUTION: ${detailedActions}`, "exec", "SYSTEM");
     
     try {
       await atcApi.executeProposals(proposals as unknown as Record<string, unknown>[]);
+      set((s) => ({ state: { ...s.state, pendingProposals: new Map() } }));
+      store.recordAction?.();
       
       for (const prop of proposals) {
         if (!prop || !prop.action) continue;
@@ -83,8 +109,6 @@ export const createAiSlice: StateCreator<
         if (['SYSTEM', 'GLOBAL', 'USER'].includes(targetKey)) {
           actualUuid = targetKey;
         } else {
-          // NOTE: Dynamic Fuzzy Matching via Levenshtein Distance & Substring Inclusion
-          // NOTE: Remove non-alphanumeric characters for clean comparison
           const cleanTk = targetKey.replace(/[^a-zA-Z0-9가-힣]/g, '');
           
           let bestMatch = null;
@@ -95,17 +119,12 @@ export const createAiSlice: StateCreator<
             const id = (a.id || '').toUpperCase().replace(/[^a-zA-Z0-9가-힣]/g, '');
             const dName = (a.displayName || '').toUpperCase().replace(/[^a-zA-Z0-9가-힣]/g, '');
             const aName = (a.name || '').toUpperCase().replace(/[^a-zA-Z0-9가-힣]/g, '');
-
-            // NOTE: Exact Match or Substring Inclusion (Highest priority)
             if (uuid === targetKey || id === cleanTk || dName === cleanTk || aName === cleanTk || 
                 (cleanTk.length >= 2 && (dName.includes(cleanTk) || aName.includes(cleanTk) || id.includes(cleanTk) || uuid.includes(cleanTk)))) {
               bestMatch = a;
               bestScore = 0;
               break;
             }
-
-            // NOTE: Fuzzy Matching (Levenshtein Distance)
-            // NOTE: Calculate distance against all possible identifiers
             const distances = [
               levenshtein(cleanTk, id),
               levenshtein(cleanTk, dName),
@@ -113,9 +132,6 @@ export const createAiSlice: StateCreator<
             ];
             
             const minDistance = Math.min(...distances);
-            
-            // NOTE: Prevent executing critical commands on wrong agent
-            // NOTE: 20% error tolerance to prevent mismatch
             const threshold = Math.max(1, Math.floor(cleanTk.length * 0.2)); // 20% error tolerance
             
             if (minDistance <= threshold && minDistance < bestScore) {
@@ -142,8 +158,6 @@ export const createAiSlice: StateCreator<
     } catch (err) {
       logger.error("AI Action Execution Failed:", err);
       store.addLog("❌ EXECUTION_FAILED: Please retry.", "critical", "SYSTEM");
-      // NOTE: Clear pending proposals on failure to prevent stale state
-      // NOTE: Clear pending proposals on failure
       set((s) => ({ state: { ...s.state, pendingProposals: new Map() } }));
     }
   },
@@ -152,8 +166,6 @@ export const createAiSlice: StateCreator<
     get().addLog(ATC_CONFIG.LOG_MSG.PROPOSAL_REJECT, "system", "SYSTEM");
     set((s) => ({ state: { ...s.state, pendingProposals: new Map() } }));
   },
-
-  // NOTE: Added clear method for manual dismiss
   clearProposals: () => {
     set((s) => ({ state: { ...s.state, pendingProposals: new Map() } }));
   },

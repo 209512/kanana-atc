@@ -32,12 +32,10 @@ export const useATCStore = create<ATCStore>()((...a) => {
     }),
     auditLogs: [], // Temporary UI state
     addAuditLog: (log: any) => {
-      // NOTE: Keep last 50 logs for UI (GC)
       set((s: ATCStore) => {
         const newLogs = [...(s.auditLogs || []), { ...log, timestamp: Date.now() }];
         return { auditLogs: newLogs.slice(-50) } as Partial<ATCStore>;
       });
-      // NOTE: Fire event to decouple IDB async save from UI state update
       atcEventBus.emit('AUDIT_LOG_ADDED', log);
     },
     initAuditLogs: async () => {
@@ -52,14 +50,12 @@ export const useATCStore = create<ATCStore>()((...a) => {
   } as any;
 });
 
-// NOTE: Prevent duplicate event listeners on hot reload
 let eventBusInitialized = false;
 
 export const initATCEventBus = () => {
   if (eventBusInitialized) return;
   eventBusInitialized = true;
 
-  // NOTE: Slice decoupling via EventBus
   atcEventBus.on('SYSTEM_ACTION', ({ action, pVal }) => {
     const store = useATCStore.getState();
     if (action === 'SCALE') store.setTrafficIntensityLocal(Number(pVal));
@@ -123,15 +119,18 @@ export const initATCEventBus = () => {
     }
   });
 
-  // NOTE: Handle async IDB persistence outside of React render cycle
   atcEventBus.on('AUDIT_LOG_ADDED', (log) => {
-    idbService.addAuditLog(log).catch(err => logger.error("IDB Add Error", err));
+    idbService.addAuditLog(log).then((ok) => {
+      if (!ok) {
+        const store = useATCStore.getState();
+        store.addLog?.('AUDIT_LOG_PERSISTENCE_FAILED', 'warn', 'SYSTEM');
+      }
+    }).catch(err => logger.error("IDB Add Error", err));
   });
 };
 
 initATCEventBus();
 
-// NOTE: Expose store to window for E2E testing
 if (typeof window !== 'undefined' && (import.meta.env.MODE !== 'production' || import.meta.env.VITE_USE_MSW === 'true')) {
   (window as unknown as { useATCStore: unknown }).useATCStore = useATCStore;
 }
