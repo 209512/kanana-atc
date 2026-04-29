@@ -9,7 +9,6 @@ import { useSTT } from '@/hooks/system/useSTT';
 
 export const CommandCenter = () => {
     const isDark = useUIStore(s => s.isDark);
-    const openKananaKeyModal = useUIStore(s => s.openKananaKeyModal);
     const isAiMode = useATCStore(s => s.isAiMode);
     const { inputValue, setInputValue, isAnalyzing, handleAnalyze, attachedImage, setAttachedImage } = useCommandCenter();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -34,14 +33,6 @@ export const CommandCenter = () => {
         
         setInputValue(baseInputValue ? `${baseInputValue} ${text}` : text);
     });
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey && isAiMode) { 
-            e.preventDefault();
-            setBaseInputValue(""); 
-            handleAnalyze();
-        }
-    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -85,7 +76,7 @@ export const CommandCenter = () => {
 
     return (
         <div className={clsx(
-            "w-full max-w-2xl px-4 transition-all duration-300 command-center-container",
+            "w-full max-w-2xl px-4 transition-all duration-300 command-center-container tour-command-center",
             !isAiMode && "opacity-60 grayscale-[0.5]"
         )}> 
             <div className={clsx(
@@ -94,7 +85,6 @@ export const CommandCenter = () => {
                 isListening ? "ring-2 ring-red-500/50 border-red-500/50 bg-red-500/5" : 
                 (isDark ? "bg-zinc-900/80 border-white/10 shadow-black/40" : "bg-white/90 border-slate-300 shadow-xl shadow-slate-200/50")
             )}>
-                {/* Status Indicator */}
                 <div className={clsx(
                     "absolute -top-3 left-6 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition-all z-10 select-none",
                     !isAiMode ? "bg-zinc-800 text-zinc-500" :
@@ -109,7 +99,6 @@ export const CommandCenter = () => {
                     </Tooltip>
                 </div>
 
-                {/* Analyze Button */}
                 <Tooltip content="Analyze Strategic Command (Enter)" position="top">
                     <button
                         onClick={() => checkAndExecute(() => {
@@ -129,7 +118,6 @@ export const CommandCenter = () => {
                     </button>
                 </Tooltip>
 
-                {/* Input Field */}
                 <div className="flex-1 relative flex items-center">
                     {attachedImage && (
                         <div className="relative shrink-0 mr-2">
@@ -179,7 +167,6 @@ export const CommandCenter = () => {
                     />
                 </div>
 
-                {/* Attachments & STT */}
                 <div className="flex items-center gap-1 pr-1">
                     <Tooltip content="Attach Image" position="top">
                         <button 

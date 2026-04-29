@@ -26,11 +26,41 @@ interface UIStore {
   setTerminalOpen: (isOpen: boolean) => void;
   isQueueOpen: boolean;
   setQueueOpen: (isOpen: boolean) => void;
+  isTourRunning: boolean;
+  startTour: () => void;
+  stopTour: () => void;
+  startupMode: 'simulation' | 'connect' | null;
+  setStartupMode: (mode: 'simulation' | 'connect' | null) => void;
 }
+
+const readStartupMode = (): UIStore['startupMode'] => {
+  try {
+    const v = window.localStorage.getItem('kanana_startup_mode');
+    if (v === 'simulation' || v === 'connect') return v;
+  } catch {
+  }
+  return null;
+};
 
 export const useUIStore = create<UIStore>((set) => ({
   isDark: true,
   setIsDark: (value) => set((state) => ({ isDark: typeof value === 'function' ? value(state.isDark) : value })),
+  isTourRunning: false,
+  startTour: () => set({ 
+    isTourRunning: true,
+    isSidebarCollapsed: false, // Ensure sidebar is open so targets are visible
+    isTacticalPanelOpen: true // Ensure tactical panel is open
+  }),
+  stopTour: () => set({ isTourRunning: false }),
+  startupMode: readStartupMode(),
+  setStartupMode: (startupMode) => {
+    try {
+      if (startupMode) window.localStorage.setItem('kanana_startup_mode', startupMode);
+      else window.localStorage.removeItem('kanana_startup_mode');
+    } catch {
+    }
+    set({ startupMode });
+  },
   isKananaKeyModalOpen: false,
   openKananaKeyModal: () => set({ isKananaKeyModalOpen: true }),
   closeKananaKeyModal: () => set({ isKananaKeyModalOpen: false }),
