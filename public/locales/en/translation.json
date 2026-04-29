@@ -3,7 +3,7 @@
   "command.placeholder.ai": "Enter strategic command...",
   "command.placeholder.offline": "AI Link is required for commands...",
   "command.analyze": "ANALYZE",
-  "error.quota": "금일 이용 쿼터를 모두 소진했습니다. 내일 00시에 초기화됩니다.",
+  "error.quota": "Request limit exceeded. Please try again later.",
   "error.badRequest": "요청 형식이 올바르지 않습니다. 파라미터를 확인해 주세요.",
   "error.unauthorized": "유효하지 않은 키입니다. 콘솔에서 키를 다시 확인하세요.",
   "error.serverError": "현재 서버 요청 폭주로 처리가 지연되고 있습니다. 잠시 후 다시 시도해 주세요.",
