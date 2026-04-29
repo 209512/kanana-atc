@@ -38,7 +38,6 @@ class OcrService {
    */
   async scanForPii(imageUrl: string): Promise<boolean> {
     try {
-      // NOTE: Wait for initialization if not ready (Promise-based lock)
       if (!this.worker) {
         await this.init();
       }
@@ -47,10 +46,7 @@ class OcrService {
         logger.error('[OCR_SERVICE] Cannot scan: Worker initialization failed.');
         return false; 
       }
-
-      // NOTE: Concurrency Control for Tesseract worker
       while (this.isScanning) {
-        // NOTE: Polling lock for parallel scan requests
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
@@ -58,7 +54,7 @@ class OcrService {
       const { data: { text } } = await this.worker.recognize(imageUrl);
       this.isScanning = false;
 
-      logger.debug('[OCR Scan Result]:', text);
+      logger.debug('[OCR Scan Result]:', this.maskForLog(text));
 
       const hasPii = this.detectPii(text);
       if (hasPii) {
@@ -69,32 +65,26 @@ class OcrService {
     } catch (error) {
       this.isScanning = false;
       logger.error('[OCR_SCAN_ERROR]', error);
-      // NOTE: In case of error, we default to allowing the upload so we don't break the UX completely,
-      // NOTE: but log it for monitoring
       return false;
     }
   }
 
+  private maskForLog(text: string): string {
+    if (!text) return '';
+    let masked = text;
+    masked = masked.replace(/\b(\d{6})[-\s]?(\d{7})\b/g, '$1-*******');
+    masked = masked.replace(/\b(01[016789])[-\s]?(\d{3,4})[-\s]?(\d{4})\b/g, '$1-****-$3');
+    masked = masked.replace(/\b([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*(@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g, '$1***$2');
+    masked = masked.replace(/\b(\d{4})[-\s]?(\d{4})[-\s]?(\d{4})[-\s]?(\d{2,4})\b/g, '$1-$2-****-$4');
+    return masked;
+  }
+
   private detectPii(text: string): boolean {
     if (!text) return false;
-    
-    // NOTE: Normalize text (remove all whitespace and dashes for easier matching)
     const normalized = text.replace(/[\s-]/g, '');
-
-    
-    // NOTE: Format: 6 digits + 7 digits
     const rrnRegex = /\d{6}\d{7}/;
-    
-    
-    // NOTE: Format: 01X + 3~4 digits + 4 digits
     const phoneRegex = /01[016789]\d{3,4}\d{4}/;
-    
-    
-    // NOTE: Check against original text to preserve @ and dots
     const emailRegex = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
-
-    
-    // NOTE: Format: 14~16 digits
     const cardRegex = /\d{14,16}/;
 
     return rrnRegex.test(normalized) || 
