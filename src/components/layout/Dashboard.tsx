@@ -9,6 +9,7 @@ import { useATCStore } from '@/store/useATCStore';
 import { useUIStore } from '@/store/useUIStore';
 
 import { DebugPanel } from '@/components/common/DebugPanel';
+import { OnboardingTour } from '@/components/common/OnboardingTour';
 
 const Radar = lazy(() => import('@/components/monitoring/radar').then(module => ({ default: module.Radar })));
 
@@ -23,18 +24,16 @@ export const Dashboard = () => {
 
   return (
     <main id="atc-dashboard" className={clsx(
-        "relative w-full h-full overflow-hidden transition-colors duration-500",
+        "relative w-full h-full overflow-hidden transition-colors duration-500 tour-radar-view",
         isDark ? "bg-[#050505]" : "bg-slate-100",
         isVisualHapticActive && "shadow-[inset_0_0_150px_rgba(239,68,68,0.4)] border-4 border-red-500/50"
     )}>
-      {/* 1. Base Layer: Radar (Z-0) */}
       <div className="absolute inset-0 z-0">
         <Suspense fallback={<div className="w-full h-full bg-[#050505] animate-pulse"></div>}>
           <Radar isMainView={true} /> 
         </Suspense>
       </div>
 
-      {/* 2. System HUD (Z-10) */}
       <div className="absolute top-4 left-6 z-10 pointer-events-none select-none opacity-30">
         <h1 className={clsx("text-4xl font-black tracking-tighter uppercase", isDark ? "text-white" : "text-slate-900")}>
           KANANA-ATC // <span className="text-red-500">TRAFFIC</span>
@@ -45,15 +44,12 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      {/* 3. Monitoring Windows (Z-30): TerminalLog, TacticalPanel */}
       <ControlTower />
 
-      {/* 4. Interactive UI Layer (Z-40): Guidelines and Command Center */}
       <div 
         className="absolute inset-y-0 left-0 z-40 transition-all duration-300 pointer-events-none md:right-[var(--sidebar-width)] right-0"
         style={{ '--sidebar-width': `${isSidebarCollapsed ? 64 : sidebarWidth}px` } as React.CSSProperties}
       >
-        {/* Top Right Control Guide */}
         <div className="absolute top-4 right-4 flex flex-col gap-2 transition-all duration-300">
             <div className={clsx(
                 "flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md text-[9px] font-mono font-bold transition-all pointer-events-auto hidden md:flex", 
@@ -73,7 +69,6 @@ export const Dashboard = () => {
                 </div>
             </div>
             
-            {/* Mobile Touch Guide */}
             <div className={clsx(
                 "flex md:hidden items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md text-[9px] font-mono font-bold transition-all pointer-events-auto", 
                 isDark ? "bg-black/40 border-white/10 text-white/60" : "bg-white/60 border-black/5 text-black/60"
@@ -89,7 +84,6 @@ export const Dashboard = () => {
             </div>
         </div>
 
-        {/* Bottom Center: Command Center */}
         <div className="absolute md:absolute inset-x-0 bottom-0 md:bottom-8 flex flex-col items-center gap-4 transition-all duration-300 w-full max-w-2xl mx-auto px-4 pb-[env(safe-area-inset-bottom,20px)] md:pb-0 z-50">
            <div className="pointer-events-auto w-full mb-2 md:mb-8">
              <ProposalBanner />
@@ -100,8 +94,9 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      {/* 5. Debug Panel */}
       <DebugPanel />
+      
+      <OnboardingTour />
     </main>
   );
 };
