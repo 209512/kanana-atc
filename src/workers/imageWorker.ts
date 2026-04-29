@@ -1,4 +1,3 @@
-// NOTE: / <reference lib="webworker" />
 
 self.onmessage = async (e: MessageEvent) => {
   const { type, payload } = e.data;

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { mergeAgentsWorker, mergeStateWorker, BufferedAgent, BufferedState } from './streamMerger.logic';
 import { Agent, ATCState } from '../contexts/atcTypes';
 
@@ -11,15 +11,11 @@ describe('Stream Merger Worker Integration Tests', () => {
     const bufferedAgents: BufferedAgent[] = [
       { id: 'agent-1', uuid: 'agent-1', displayName: 'Agent 1', status: 'active', priority: false, isPaused: false }
     ];
-
-    // NOTE: Simulate an optimistic UI lock where user just paused agent-1
     const fieldLocks: [string, [string, { value: string | boolean; expiry: number }][]][] = [
       ['agent-1', [['isPaused', { value: true, expiry: Date.now() + 5000 }]]]
     ];
 
     const { newAgents, locksToDelete } = mergeAgentsWorker(prevAgents, bufferedAgents, [], fieldLocks, Date.now());
-
-    // NOTE: Should override server state with optimistic lock
     expect(newAgents[0].isPaused).toBe(true);
     expect(newAgents[0].status).toBe('active');
     expect(locksToDelete.length).toBe(0); // Lock is not expired and server didn't match yet
@@ -30,15 +26,11 @@ describe('Stream Merger Worker Integration Tests', () => {
     const bufferedAgents: BufferedAgent[] = [
       { id: 'agent-1', uuid: 'agent-1', displayName: 'Agent 1', status: 'idle', priority: false, isPaused: false }
     ];
-
-    // NOTE: Simulate an expired lock
     const fieldLocks: [string, [string, { value: string | boolean; expiry: number }][]][] = [
       ['agent-1', [['isPaused', { value: true, expiry: Date.now() - 1000 }]]]
     ];
 
     const { newAgents, locksToDelete } = mergeAgentsWorker(prevAgents, bufferedAgents, [], fieldLocks, Date.now());
-
-    // NOTE: Should ignore expired lock and use server state
     expect(newAgents[0].isPaused).toBe(false);
     expect(locksToDelete).toEqual([{ uuid: 'agent-1', field: 'isPaused' }]);
   });
@@ -71,8 +63,6 @@ describe('Stream Merger Worker Integration Tests', () => {
     };
 
     const { newState } = mergeStateWorker(prevState, bufferedState, [], Date.now());
-
-    // NOTE: Should contain both UI log and Server log, sorted by timestamp
     expect(newState.logs.length).toBe(2);
     expect(newState.logs[0].id).toBe('ui-1');
     expect(newState.logs[1].id).toBe('log-1');

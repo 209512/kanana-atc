@@ -57,7 +57,6 @@ export const mergeAgentsWorker = (
     const existingAgent = prevAgents.find(a => a.id === originalId);
     
     if (existingAgent) {
-      // NOTE: Ensure dynamic fields are updated during merge
       return {
         ...existingAgent,
         ...agent,
@@ -114,8 +113,6 @@ export const mergeStateWorker = (
     const log = l as LogEntry; 
     if (log && log.id) uniqueMap.set(log.id, log); 
     });
-
-  // NOTE: Merge logs and maintain up to 1000 items (matching ATC_CONFIG.LOGS.MAX_DISPLAY)
   const sortedLogs = Array.from(uniqueMap.values())
     .sort((a: LogEntry, b: LogEntry) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0))
     .slice(-1000);
