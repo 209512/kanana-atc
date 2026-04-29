@@ -90,7 +90,7 @@ export const useAgentMutations = () => {
       
       return { actualUuid };
     },
-    onError: (err, uuid, context) => {
+    onError: (err, _uuid, _context) => {
       logger.error('[MUTATION] transferLock Error:', err);
       const store = useATCStore.getState();
       store.playAlert();
@@ -120,12 +120,12 @@ export const useAgentMutations = () => {
       store.markAction(actualUuid, '', null, true);
       return { actualUuid, originalCount: agents.length };
     },
-    onSuccess: (data, uuid, context) => {
+    onSuccess: (_data, _uuid, context) => {
       if (context?.originalCount) {
         useATCStore.getState().setTrafficIntensityLocal(Math.max(0, context.originalCount - 1));
       }
     },
-    onError: (err, uuid, context) => {
+    onError: (err, _uuid, context) => {
       if (err.message === 'Cannot terminate last agent') return;
       logger.error('[MUTATION] terminateAgent Error:', err);
       const store = useATCStore.getState();

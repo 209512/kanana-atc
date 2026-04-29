@@ -15,8 +15,8 @@ export const useSTT = (onResult: (text: string) => void) => {
 
         if (SpeechRecognition) {
             const recog = new SpeechRecognition();
-            recog.continuous = true; // NOTE: Continuous recognition
-            recog.interimResults = true; // NOTE: Enable interim results
+            recog.continuous = true;
+            recog.interimResults = true;
             recog.lang = 'ko-KR';
 
             recog.onresult = (event: any) => {
@@ -40,10 +40,9 @@ export const useSTT = (onResult: (text: string) => void) => {
             recog.onerror = (e: any) => {
                 console.error("STT Error:", e.error);
                 setIsListening(false);
-                // NOTE: Optional auto-restart on network error
                 if (e.error === 'network') {
                     retryTimeoutRef.current = setTimeout(() => {
-                        try { recog.start(); setIsListening(true); } catch(_ignore) { /* ignore start error on network retry */ }
+                        try { recog.start(); setIsListening(true); } catch {}
                     }, 1000);
                 }
             };
@@ -52,8 +51,6 @@ export const useSTT = (onResult: (text: string) => void) => {
 
             setRecognition(recog);
         }
-
-        // NOTE: Cleanup timer and recognizer on unmount
         return () => {
             if (retryTimeoutRef.current) {
                 clearTimeout(retryTimeoutRef.current);
@@ -61,14 +58,12 @@ export const useSTT = (onResult: (text: string) => void) => {
         };
     }, []); // Empty dependency array ensures this runs only once on mount
 
-    const toggleListening = useCallback((currentInputValue: string = '') => {
+    const toggleListening = useCallback(() => {
         if (isListening) {
             recognition?.stop();
             setIsListening(false);
         } else {
             try {
-                // NOTE: Could remember current text on start,
-                // NOTE: but it's safer to combine in the component since onResult overwrites
                 recognition?.start();
                 setIsListening(true);
             } catch (e) {

@@ -42,11 +42,8 @@ export const createActionSlice: StateCreator<
     const targetId = uuid ? String(uuid) : 'SYSTEM_GLOBAL';
     
     set((s) => {
-      // NOTE: Immutable state updates for React rendering
       const newDeletedIds = new Set(s.deletedIds);
       const newFieldLocks = new Map(s.fieldLocks);
-      
-      // NOTE: Use configurable lock duration to prevent rubber-banding
       const lockDuration = Number(import.meta.env.VITE_LOCK_DURATION) || 5000;
       
       if (isDelete) {
@@ -58,14 +55,12 @@ export const createActionSlice: StateCreator<
       }
 
       if (uuid === '') {
-        // NOTE: Global state update
         return { 
           deletedIds: newDeletedIds,
           fieldLocks: newFieldLocks,
           state: { ...s.state, [field]: value } 
         };
       } else {
-        // NOTE: Agent specific update
         const newAgents = s.agents.map(agent => {
           if (agent.uuid === uuid || agent.id === uuid) {
             if (isDelete) return { ...agent, isDeleting: true };

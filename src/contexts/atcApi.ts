@@ -1,7 +1,8 @@
 import { parseStreamChunk } from '@/utils/streamParser';
 import { logger } from '../utils/logger';
-import { useATCStore } from '@/store/useATCStore';
 import { request } from '@/utils/apiClient';
+import { ATC_CONFIG } from '@/constants/atcConfig';
+import type { FieldReport } from '@/contexts/atcTypes';
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -14,22 +15,16 @@ export interface AiPayload {
   signal?: AbortSignal;
 }
 
-
 export const atcApi = {
   askKanana: async (payload: AiPayload, onChunk?: (text: string, audioBase64: string | null) => void) => {
     const finalMessages = payload.messages 
       ? payload.messages 
       : [{ role: "user" as const, content: payload.text || "" }];
 
-    // NOTE: Environment-aware Audio Fallback (PCM on local, Web API on Vercel)
     const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
     const envAudio = import.meta.env.VITE_USE_KANANA_AUDIO;
-    const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+    const useAudio = envAudio === 'true' || envAudio === true || (isLocal && envAudio !== 'false' && envAudio !== false);
     
-    // NOTE: Force TTS fallback on Vercel to prevent 50MB payload limits
-    const useAudio = !isVercel && (envAudio === 'true' || envAudio === true || (isLocal && envAudio !== 'false' && envAudio !== false));
-    
-    // NOTE: Fake Keep-Alive on Vercel (10s Edge Timeout Bypass)
     const isStream = true;
     
     const extra_body = {
@@ -67,7 +62,6 @@ export const atcApi = {
         throw new Error("Empty response from /kanana API");
       }
       
-      // NOTE: Handle Offline Queue Response Gracefully
       if (response.queued) {
         const msg = "[SYSTEM_OFFLINE] 네트워크 연결이 끊어졌습니다. 요청이 큐에 저장되어 연결 복구 시 자동 동기화됩니다.";
         if (onChunk) onChunk(msg, null);
@@ -76,43 +70,23 @@ export const atcApi = {
     
     let resultPayload: any = null;
 
-    // NOTE: Poll Async Queue (Redis) via Web Worker to prevent UI freezing/frame drops
     if (response && !(response instanceof Response) && response.job_id) {
       const jobId = response.job_id;
-      
-      resultPayload = await new Promise((resolve, reject) => {
-        const worker = new Worker(new URL('../workers/pollWorker.ts', import.meta.url), { type: 'module' });
-        
-        worker.onmessage = (e) => {
-          if (e.data.type === 'SUCCESS') {
-            resolve(e.data.payload);
-          } else if (e.data.type === 'ERROR') {
-            reject(new Error(e.data.error || 'ASYNC_JOB_FAILED'));
-          }
-          worker.terminate();
-        };
-
-        worker.onerror = (e) => {
-          reject(new Error('PollWorker failed: ' + e.message));
-          worker.terminate();
-        };
-
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
-        let apiKey = import.meta.env.VITE_KANANA_API_KEY || "";
-        if (!apiKey && typeof window !== 'undefined' && window.sessionStorage) {
-            apiKey = window.sessionStorage.getItem('KANANA_API_KEY') || "";
+      const pollResult = async () => {
+        const maxRetries = ATC_CONFIG.AI.POLL_MAX_RETRIES;
+        const pollInterval = ATC_CONFIG.AI.POLL_INTERVAL_MS;
+        for (let i = 0; i < maxRetries; i++) {
+          const data = await request(`/kanana-poll?job_id=${encodeURIComponent(jobId)}`, { method: 'GET', signal: payload.signal });
+          if (data?.status === 'completed') return data.result;
+          if (data?.status === 'failed') throw new Error(data.error || 'ASYNC_JOB_FAILED');
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
         }
-        
-        worker.postMessage({ jobId, baseUrl, apiKey });
-      });
+        throw new Error('ASYNC_JOB_TIMEOUT');
+      };
 
-      if (!resultPayload) {
-        throw new Error("ASYNC_JOB_TIMEOUT");
-      }
+      resultPayload = await pollResult();
     } else {
-      // NOTE: Fallback for synchronous or direct stream mode
       if (response instanceof Response && response.body) {
-        // NOTE: Stream reading
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let done = false;
@@ -160,6 +134,35 @@ export const atcApi = {
     }
 
     return resultPayload;
+  },
+
+  askGemini: async (payload: Record<string, unknown>): Promise<FieldReport> => {
+    const response = await request('/gemini', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      timeout: 15000,
+      retries: 0
+    });
+
+    if (!response) throw new Error("Empty response from /gemini API");
+    if (response.error) throw new Error(String(response.error));
+    if (response.report) return response.report as FieldReport;
+    if (response.log && typeof response.log === 'string') {
+      const agentId = String((payload as any).agentId || 'AGENT');
+      const agentName = String((payload as any).agentName || agentId);
+      const risk_level = Number((payload as any)?.externalData?.risk_level ?? 5);
+      const condition = (risk_level >= 8 ? 'CRITICAL' : risk_level >= 5 ? 'CAUTION' : 'NORMAL') as FieldReport['condition'];
+      return {
+        agentId,
+        agentName,
+        risk_level,
+        condition,
+        strategy: null,
+        message: response.log,
+        ts: Date.now()
+      };
+    }
+    throw new Error("Invalid response from /gemini API");
   },
   
   executeProposals: async (actions: Record<string, unknown>[]) => {

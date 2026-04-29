@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
+import { useRef, useState, useLayoutEffect, useCallback } from 'react';
 
 export const useTerminalScroll = (dependency: unknown, isCollapsed: boolean, streamingText?: string) => {
   const scrollRef = useRef<HTMLDivElement>(null);

@@ -22,7 +22,6 @@ export const createCoreSlice: StateCreator<
     overrideSignal: false,
     collisionCount: 0,
     latency: 0,
-    autonomyLevel: 100
   },
   agents: [],
   setState: (updater) => set((s) => ({ state: typeof updater === 'function' ? updater(s.state) : updater })),
@@ -52,8 +51,6 @@ export const createCoreSlice: StateCreator<
         agentId,
         agentName: resolvedAgentName
       };
-
-      // NOTE: Only keep the latest 100 logs to prevent memory leak and lag, DO NOT clear all logs
       const maxLogs = 100;
       const newLogs = [...s.state.logs, newLog].slice(-maxLogs);
       
