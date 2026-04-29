@@ -1,23 +1,24 @@
 import { idbService } from './idbService';
 
-const MAGIC_PREFIX = "ENC_GCM_";
-const KEY_NAME = "kanana_atc_master_key";
+export const SECURE_STORAGE_KEYS = {
+    MAGIC_PREFIX: "ENC_GCM_",
+    MASTER_KEY_NAME: "kanana_atc_master_key",
+    KANANA_API_KEY: "KANANA_API_KEY",
+    AGENT_API_KEYS: "AGENT_API_KEYS",
+};
 
-// NOTE: Store extractable:false CryptoKey in IndexedDB instead of plaintext localStorage
 const getCryptoKey = async (): Promise<CryptoKey> => {
-    let key = await idbService.getCryptoKey(KEY_NAME);
+    let key = await idbService.getCryptoKey(SECURE_STORAGE_KEYS.MASTER_KEY_NAME);
     if (!key) {
         key = await crypto.subtle.generateKey(
             { name: "AES-GCM", length: 256 },
             false, // non-extractable! XSS cannot steal the raw key material
             ["encrypt", "decrypt"]
         );
-        await idbService.saveCryptoKey(KEY_NAME, key);
+        await idbService.saveCryptoKey(SECURE_STORAGE_KEYS.MASTER_KEY_NAME, key);
     }
     return key;
 };
-
-// NOTE: Convert ArrayBuffer to Base64
 const bufferToBase64 = (buffer: ArrayBuffer): string => {
     const bytes = new Uint8Array(buffer);
     let binary = '';
@@ -26,8 +27,6 @@ const bufferToBase64 = (buffer: ArrayBuffer): string => {
     }
     return btoa(binary);
 };
-
-// NOTE: Convert Base64 to ArrayBuffer
 const base64ToBuffer = (base64: string): ArrayBuffer => {
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
@@ -48,22 +47,21 @@ export const encryptDataAsync = async (text: string): Promise<string> => {
             key,
             enc.encode(text)
         );
-        const ivBase64 = bufferToBase64(iv);
+        const ivBase64 = bufferToBase64(iv.buffer);
         const encryptedBase64 = bufferToBase64(encrypted);
-        return MAGIC_PREFIX + ivBase64 + ":" + encryptedBase64;
+        return SECURE_STORAGE_KEYS.MAGIC_PREFIX + ivBase64 + ":" + encryptedBase64;
     } catch (e) {
         console.error("Encryption failed", e);
         return "";
     }
 };
 
-// NOTE: Do not export decryptDataAsync to prevent XSS from directly extracting the raw API keys
 const decryptDataAsync = async (encoded: string): Promise<string> => {
     if (!encoded) return "";
     
-    if (encoded.startsWith(MAGIC_PREFIX)) {
+    if (encoded.startsWith(SECURE_STORAGE_KEYS.MAGIC_PREFIX)) {
         try {
-            const payload = encoded.slice(MAGIC_PREFIX.length);
+            const payload = encoded.slice(SECURE_STORAGE_KEYS.MAGIC_PREFIX.length);
             const [ivBase64, encryptedBase64] = payload.split(":");
             if (!ivBase64 || !encryptedBase64) return "";
             
@@ -83,8 +81,6 @@ const decryptDataAsync = async (encoded: string): Promise<string> => {
         }
     }
     
-    // NOTE: Fallback for legacy XOR or base64 (migration support)
-    // NOTE: Removed insecure XOR fallback. Treat legacy data as invalid and require re-entry
     if (encoded.startsWith("ENC_")) {
         console.error("Legacy XOR encryption is unsupported for security reasons.");
         return "";
@@ -93,19 +89,18 @@ const decryptDataAsync = async (encoded: string): Promise<string> => {
     return encoded;
 };
 
-// NOTE: Safe helper to update agent keys without exposing raw decryption
 export const updateAgentKeyAsync = async (agent: string, provider: string, newKey: string): Promise<void> => {
     if (typeof window === 'undefined' || !window.localStorage) return;
     
     let keys: Record<string, Record<string, string>> = {};
-    const encrypted = window.localStorage.getItem('AGENT_API_KEYS');
+    const encrypted = window.localStorage.getItem(SECURE_STORAGE_KEYS.AGENT_API_KEYS);
     
     if (encrypted) {
         const decrypted = await decryptDataAsync(encrypted);
         if (decrypted) {
             try {
                 keys = JSON.parse(decrypted);
-            } catch (e) {
+            } catch {
                 keys = {};
             }
         }
@@ -113,7 +108,6 @@ export const updateAgentKeyAsync = async (agent: string, provider: string, newKe
     
     if (!keys[agent]) keys[agent] = {};
     
-    // NOTE: Only update if it's a real key, not the placeholder
     if (newKey && newKey !== "••••••••••••••••") {
         keys[agent][provider] = newKey;
     } else if (!newKey) {
@@ -121,14 +115,13 @@ export const updateAgentKeyAsync = async (agent: string, provider: string, newKe
     }
     
     const reEncrypted = await encryptDataAsync(JSON.stringify(keys));
-    window.localStorage.setItem('AGENT_API_KEYS', reEncrypted);
+    window.localStorage.setItem(SECURE_STORAGE_KEYS.AGENT_API_KEYS, reEncrypted);
 };
 
-// NOTE: Safe helper to check if a specific agent key exists
 export const hasAgentKeyAsync = async (agent: string, provider: string): Promise<boolean> => {
     if (typeof window === 'undefined' || !window.localStorage) return false;
     
-    const encrypted = window.localStorage.getItem('AGENT_API_KEYS');
+    const encrypted = window.localStorage.getItem(SECURE_STORAGE_KEYS.AGENT_API_KEYS);
     if (!encrypted) return false;
     
     const decrypted = await decryptDataAsync(encrypted);
@@ -142,11 +135,10 @@ export const hasAgentKeyAsync = async (agent: string, provider: string): Promise
     }
 };
 
-// NOTE: Expose only a safe injector function instead of raw decryption
 export const injectSecureHeaders = async (headers: Record<string, string>): Promise<void> => {
     if (typeof window === 'undefined' || !window.localStorage) return;
     
-    const kananaKeyRaw = window.sessionStorage?.getItem?.('KANANA_API_KEY') || window.localStorage.getItem('KANANA_API_KEY');
+    const kananaKeyRaw = window.sessionStorage?.getItem?.(SECURE_STORAGE_KEYS.KANANA_API_KEY) || window.localStorage.getItem(SECURE_STORAGE_KEYS.KANANA_API_KEY);
     if (kananaKeyRaw) {
         const decodedKey = await decryptDataAsync(kananaKeyRaw);
         if (decodedKey) {
@@ -154,7 +146,7 @@ export const injectSecureHeaders = async (headers: Record<string, string>): Prom
         }
     }
     
-    const agentKeysRaw = window.localStorage.getItem('AGENT_API_KEYS');
+    const agentKeysRaw = window.localStorage.getItem(SECURE_STORAGE_KEYS.AGENT_API_KEYS);
     if (agentKeysRaw) {
         const decodedAgentKeys = await decryptDataAsync(agentKeysRaw);
         if (decodedAgentKeys) {

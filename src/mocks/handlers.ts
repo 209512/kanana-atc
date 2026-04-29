@@ -5,8 +5,6 @@ import { ATC_CONFIG, ATCColor } from '@/constants/atcConfig';
 
 const { SIMULATOR, LOG_MSG } = ATC_CONFIG;
 
-let isInitialized = false;
-
 /**
  * Resolves ID to actual UUID if DisplayName is provided
  */
@@ -61,7 +59,7 @@ const resolveUuid = (idOrName: string): string => {
   return bestMatch ? bestMatch.uuid : idOrName;
 };
 
-const getOrbitPosition = (seed: number, activeTime: number, index: number, isPaused: boolean): [number, number, number] => {
+const getOrbitPosition = (seed: number, activeTime: number, index: number, _isPaused: boolean): [number, number, number] => {
   const radius = 5 + (index % 3) * 2.8;
   const direction = (seed % 2 === 0) ? 1 : -1;
   const angle = (seed * (Math.PI * 2 / 5)) + (activeTime * 0.0003 * direction);
@@ -71,23 +69,54 @@ const getOrbitPosition = (seed: number, activeTime: number, index: number, isPau
 const lastActiveTimes = new Map<string, number>();
 
 export const handlers = [
-  http.all('*/api/kanana', () => passthrough()),
-  http.all('*/proxy/kanana', () => passthrough()),
-  http.all('*/api/kanana-poll', () => passthrough()),
-  http.all('*/api/init', () => passthrough()),
-  http.all('*/api/gemini', () => passthrough()),
-  http.all('*/api/openai', () => passthrough()),
-  http.all('*/api/anthropic', () => passthrough()),
+  http.all('/api/kanana', () => passthrough()),
+  http.all('/proxy/kanana', () => passthrough()),
+  http.all('/api/kanana-poll', () => passthrough()),
+  http.all('/api/init', ({ request }) => {
+    const key = request.headers.get('x-kanana-key');
+    if (key && key.trim() !== '') return passthrough();
+    return HttpResponse.json({ token: null }, { status: 200 });
+  }),
+  http.post('/api/gemini', async ({ request }) => {
+    const agentKeys = request.headers.get('x-agent-keys');
+    if (agentKeys && agentKeys.trim() !== "") return passthrough();
 
-  // NOTE: Stream Handler
-  http.get('*/api/stream', () => {
-    isInitialized = true;
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch {
+      body = {};
+    }
+
+    const agentName = body.agentName || body.agentId || "AGENT";
+    const riskLevel = Number(body.externalData?.risk_level ?? 5);
+    const load = body.externalData?.load ?? "0%";
+    const lat = body.externalData?.lat ?? "0ms";
+
+    const condition = riskLevel >= 8 ? "CRITICAL" : riskLevel >= 5 ? "CAUTION" : "NORMAL";
+    const msg = `STATUS=${condition} load=${load} lat=${lat} agent=${agentName}`;
+    return HttpResponse.json({
+      report: {
+        agentId: String(body.agentId || "AGENT"),
+        agentName: String(agentName),
+        risk_level: riskLevel,
+        condition,
+        strategy: condition === "CRITICAL" ? "ASSET_PROTECTION" : null,
+        message: msg,
+        ts: Date.now()
+      },
+      log: msg,
+      mock: true
+    }, { status: 200 });
+  }),
+  http.all('/api/openai', () => passthrough()),
+  http.all('/api/anthropic', () => passthrough()),
+  http.get('/api/stream', () => {
     const encoder = new TextEncoder();
     let intervalId: any;
     
     return new HttpResponse(new ReadableStream({
       start(controller) {
-        // NOTE: WORKER: Dynamic interval for main thread optimization (250ms ~ 1000ms)
         const agentCount = simulator.agents.size;
         const dynamicInterval = Math.max(250, Math.min(1000, agentCount * 5));
         
@@ -146,7 +175,7 @@ export const handlers = [
           };
           try { 
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`)); 
-          } catch (e) { 
+          } catch { 
             clearInterval(intervalId); 
           }
         }, dynamicInterval);
@@ -156,9 +185,7 @@ export const handlers = [
       }
     }), { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
   }),
-
-  // NOTE: Bulk Action Handler (w/ resolveUuid)
-  http.post('*/api/actions/bulk', async ({ request }) => {
+  http.post('/api/actions/bulk', async ({ request }) => {
     const { actions } = await request.json() as { actions: any[] };
     
     if (!actions || !Array.isArray(actions)) {
@@ -168,8 +195,6 @@ export const handlers = [
     actions.forEach(action => {
       const { action: type, targetId: rawTargetId, value } = action;
       if (!rawTargetId && !['STOP', 'START', 'OVERRIDE', 'RELEASE'].includes(type)) return;
-
-      // NOTE: Convert provided ID to actual UUID
       const targetId = resolveUuid(rawTargetId);
 
       switch(type) {
@@ -227,9 +252,7 @@ export const handlers = [
 
     return HttpResponse.json({ success: true });
   }),
-  
-  // NOTE: Agent Scale
-  http.post('*/api/agents/scale', async ({ request }) => {
+  http.post('/api/agents/scale', async ({ request }) => {
     const { count } = await request.json() as any;
     simulator.updateState({ trafficIntensity: count });
     const currentAgents = Array.from(simulator.agents.values());
@@ -265,9 +288,7 @@ export const handlers = [
     }
     return HttpResponse.json({ success: true, count });
   }),
-
-  // NOTE: Pause Control
-  http.post('*/api/agents/:uuid/pause', async ({ request, params }) => {
+  http.post('/api/agents/:uuid/pause', async ({ request, params }) => {
     const { pause } = await request.json() as any;
     const { uuid } = params;
     if (simulator.updateAgent(uuid as string, { isPaused: pause })) {
@@ -280,9 +301,7 @@ export const handlers = [
     }
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
-
-  // NOTE: Priority Control
-  http.post('*/api/agents/:uuid/priority', async ({ request, params }) => {
+  http.post('/api/agents/:uuid/priority', async ({ request, params }) => {
     const { enable } = await request.json() as any;
     const { uuid } = params;
     const targetId = uuid as string;
@@ -300,9 +319,7 @@ export const handlers = [
     }
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
-
-  // NOTE: Agent Rename
-  http.post('*/api/agents/:uuid/rename', async ({ params, request }) => {
+  http.post('/api/agents/:uuid/rename', async ({ params, request }) => {
     const { uuid } = params;
     const { newName } = await request.json() as any;
     const targetId = String(uuid);
@@ -313,9 +330,7 @@ export const handlers = [
     }
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
-
-  // NOTE: Get Agent Config
-  http.get('*/api/agents/:uuid/config', ({ params }) => {
+  http.get('/api/agents/:uuid/config', ({ params }) => {
     const { uuid } = params;
     const agent = simulator.agents.get(uuid as string);
     if (agent) {
@@ -328,47 +343,63 @@ export const handlers = [
     }
     return HttpResponse.json({ success: false }, { status: 404 });
   }),
-
-  // NOTE: Inject Debug Event
-  http.post('*/api/mock/inject-event', async ({ request }) => {
+  http.post('/api/mock/inject-event', async ({ request }) => {
     try {
-      const { targetId, eventType, severity } = await request.json() as any;
-      if (simulator.agents.has(targetId)) {
-        simulator.addLog(targetId, `[CONDITION:${eventType}] [RISK_LEVEL:${severity === 'CRITICAL' ? 9 : 5}]`, severity.toLowerCase());
+      const body = await request.json().catch(() => ({})) as any;
+      let targetId = String(body.targetId || '');
+      let eventType = body.eventType;
+      let severity = body.severity;
+
+      if (!eventType) {
+        if (body.news) eventType = 'URBAN_FIRE';
+        else if (body.weather) eventType = 'STORM_WARNING';
+        else if (body.economy) eventType = 'ECONOMY_CRITICAL';
+        else if (body.custom) eventType = String(body.custom).slice(0, 64).replace(/\s+/g, '_').toUpperCase();
+      }
+
+      if (!severity) {
+        const upper = String(eventType || '').toUpperCase();
+        severity =
+          upper.includes('FIRE') || upper.includes('CRITICAL') ? 'CRITICAL' :
+          upper.includes('STORM') ? 'CAUTION' :
+          upper.includes('ECONOMY') ? 'CAUTION' :
+          'CAUTION';
+      }
+
+      if (!targetId || !simulator.agents.has(targetId)) {
+        const first = simulator.agents.keys().next();
+        if (!first.done) targetId = String(first.value);
+      }
+
+      if (targetId && simulator.agents.has(targetId) && eventType) {
+        simulator.addLog(targetId, `[CONDITION:${eventType}] [RISK_LEVEL:${String(severity).toUpperCase() === 'CRITICAL' ? 9 : 5}]`, String(severity).toLowerCase());
         return HttpResponse.json({ success: true });
       }
-      return HttpResponse.json({ success: false }, { status: 404 });
-    } catch (e) {
+
+      return HttpResponse.json({ success: false }, { status: 400 });
+    } catch {
       return HttpResponse.json({ success: false }, { status: 400 });
     }
   }),
-
-  // NOTE: Global Stop
-  http.post('*/api/stop', async ({ request }) => {
+  http.post('/api/stop', async ({ request }) => {
     const { enable } = await request.json() as any;
     simulator.state.globalStop = enable;
     simulator.addLog("USER", enable ? LOG_MSG.GLOBAL_STOP : LOG_MSG.GLOBAL_START, "system");
     return HttpResponse.json({ success: true });
   }),
-
-  // NOTE: Emergency Override
-  http.post('*/api/override', () => { 
+  http.post('/api/override', () => { 
     simulator.state.overrideSignal = true; 
     simulator.state.holder = 'USER';
     simulator.addLog("USER", LOG_MSG.EMERGENCY_OVERRIDE, "critical");
     return HttpResponse.json({ success: true }); 
   }),
-
-  // NOTE: Release Override
-  http.post('*/api/release', () => { 
+  http.post('/api/release', () => { 
     simulator.state.overrideSignal = false; 
     simulator.state.holder = null;
     simulator.addLog("USER", LOG_MSG.OVERRIDE_RELEASED, "info");
     return HttpResponse.json({ success: true }); 
   }),
-
-  // NOTE: Terminate Agent
-  http.delete('*/api/agents/:uuid', ({ params }) => { 
+  http.delete('/api/agents/:uuid', ({ params }) => { 
     const { uuid } = params;
     const targetId = String(uuid);
     const agent = simulator.agents.get(targetId);
@@ -389,9 +420,7 @@ export const handlers = [
     }
     return HttpResponse.json({ success: true });
   }),
-
-  // NOTE: Force Transfer Lock
-  http.post('*/api/agents/:uuid/transfer-lock', ({ params }) => { 
+  http.post('/api/agents/:uuid/transfer-lock', ({ params }) => { 
     const { uuid } = params;
     const targetId = String(uuid);
     
@@ -402,18 +431,14 @@ export const handlers = [
     simulator.addLog(targetId, LOG_MSG.FORCE_TRANSFER, "system");
     return HttpResponse.json({ success: true }); 
 }),
-
-  // NOTE: Update Priority Order
-  http.post('*/api/agents/priority-order', async ({ request }) => {
+  http.post('/api/agents/priority-order', async ({ request }) => {
     const { order } = await request.json() as any;
     simulator.state.priorityAgents = order;
     const names = order.map((id: string) => simulator.agents.get(id)?.displayName || id).join(' > ');
     simulator.addLog('POLICY', LOG_MSG.PRIORITY_UPDATED(names), 'info');
     return HttpResponse.json({ success: true });
   }),
-
-  // NOTE: Update Agent Config (POST)
-  http.post('*/api/agents/:uuid/config', async ({ params, request }) => {
+  http.post('/api/agents/:uuid/config', async ({ params, request }) => {
     const body = await request.json() as any;
     const { uuid } = params;
     if (simulator.agents.has(uuid as string)) {

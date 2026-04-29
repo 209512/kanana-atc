@@ -76,7 +76,7 @@ class ATCSimulator {
       id: id,
       displayName: `Agent-${finalIndex}`,
       seed: Math.random() * 1000,
-      model: isGemini ? 'Gemini 1.5 Flash' : 'MQ-9 Reaper Class',
+      model: isGemini ? 'gemini-2.5-flash' : 'mock-model',
       provider: isGemini ? 'gemini' : 'mock',
       systemPrompt: 'You are a professional AI.',
       persona: isGemini ? 'Reconnaissance-specialized Intelligent Drone' : undefined,
@@ -110,7 +110,6 @@ class ATCSimulator {
       timestamp: Date.now(),
       type
     };
-    // NOTE: GC: Keep 500 logs to prevent memory bloat
     this.state.logs = [...this.state.logs.slice(-499), logEntry];
   }
 
@@ -120,8 +119,6 @@ class ATCSimulator {
 
   update() {
     const now = Date.now();
-
-    // NOTE: Global stop / Override
     if (this.state.globalStop || this.state.overrideSignal) {
       if (this.state.globalStop) {
         this.state.holder = null;
@@ -129,16 +126,12 @@ class ATCSimulator {
       }
       return;
     }
-
-    // NOTE: Ghost Agent validation
     if (this.state.holder && !this.agents.has(this.state.holder)) this.state.holder = null;
     if (this.state.forcedCandidate && !this.agents.has(this.state.forcedCandidate)) this.state.forcedCandidate = null;
 
     const allAgents = Array.from(this.agents.values());
     const aliveAgents = allAgents.filter(a => !a.isPaused);
     const aliveUids = aliveAgents.map(a => a.uuid);
-
-    // NOTE: Transfer-Lock assignment
     if (this.state.forcedCandidate) {
       if (now >= this.lockExpiry) {
         const targetId = this.state.forcedCandidate;
@@ -152,10 +145,7 @@ class ATCSimulator {
       }
       return;
     }
-
-    // NOTE: Load variation & contention logic
     aliveAgents.forEach((agent) => {
-      // NOTE: Base Load fluctuation
       if (agent.status !== 'error') {
         let newBaseLoad = (agent.baseLoad || 30) + (Math.random() * 10 - 5);
         newBaseLoad = Math.max(10, Math.min(100, newBaseLoad));
@@ -177,8 +167,6 @@ class ATCSimulator {
         const endpoint = endpointMap[agent.provider];
         if (!endpoint) return;
         const lastCall = this.lastGeminiCalls.get(agent.uuid) || 0;
-        
-        // NOTE: Event Push: Trigger AI assessment randomly (10% chance) after a 20s cooldown
         if (now - lastCall > 20000) {
           this.lastGeminiCalls.set(agent.uuid, now);
           
@@ -192,8 +180,6 @@ class ATCSimulator {
               news: Math.random() > 0.5 ? "Urban Fire Detected" : "Marine SOS Signal Detected",
               risk_level: String(currentRiskLevel),
             };
-
-            // NOTE: IDB Image Consume & GC
             let base64Image = undefined;
             const transientImg = getTransientImage();
             if (transientImg) {
@@ -202,8 +188,6 @@ class ATCSimulator {
             }
 
             import('@/utils/apiClient').then(({ request }) => {
-              // NOTE: Create a shallow copy of the state, excluding the potentially massive 'logs' array
-              // NOTE: to prevent 413 Payload Too Large errors from the Gemini endpoint
               const stateCopy = { ...this.state };
               if (stateCopy.logs) {
                  stateCopy.logs = stateCopy.logs.slice(-3); // Keep only the last 3 logs to give context without bloating
@@ -224,11 +208,10 @@ class ATCSimulator {
               })
               .then(data => {
                 if (data.log) {
-                  // NOTE: Parse JSON safely
                   let parsedData: any = {};
                   try {
                     parsedData = JSON.parse(data.log);
-                  } catch(e) {
+                  } catch {
                     const jsonMatch = data.log.match(/\{[\s\S]*\}/);
                     if (jsonMatch) {
                       try {
@@ -236,17 +219,13 @@ class ATCSimulator {
                       } catch(innerE) { logger.warn('Failed to parse Gemini log text as JSON', innerE); }
                     }
                   }
-
-                  // NOTE: Determine Severity
                   let severity = 'info';
                   if (parsedData.risk_level && parsedData.risk_level >= 8) severity = 'critical';
                   else if (parsedData.risk_level && parsedData.risk_level >= 5) severity = 'warn';
                   
                   const msg = parsedData.message || data.log;
                   
-                  this.addLog(agent.uuid, msg, severity); // NOTE: Removed [Gemini Intelligence] prefix for better immersion
-
-                  // NOTE: Auto-Protocol: Force PAUSE if critical risk
+                  this.addLog(agent.uuid, msg, severity);
                   if (parsedData.risk_level >= 9 || data.log.includes('"risk_level": 9') || data.log.includes('"risk_level": 10') || data.log.includes('"risk_level":9') || data.log.includes('"risk_level":10') || data.log.includes('[RISK_LEVEL:9]') || data.log.includes('[RISK_LEVEL:10]')) {
                     this.updateAgent(agent.uuid, { isPaused: true });
                     this.addLog(agent.uuid, `[Gemini Auto-Protocol] Auto-PAUSE executed.`, 'exec');
@@ -292,8 +271,6 @@ class ATCSimulator {
               this.addLog(agent.uuid, LOG_MSG.WAIT_FOR(holderAgent.displayName), 'warn');
             }
           }
-          
-          // NOTE: Generate random waiting load
           const randomLoad = Math.floor(Math.random() * 100);
           this.updateAgent(agent.uuid, {
             status: 'waiting',
@@ -302,8 +279,6 @@ class ATCSimulator {
         }
       }
     });
-
-    // NOTE: Normal Assignment
     if (!this.state.holder || now > this.lockExpiry) {
       if (aliveUids.length > 0) {
         const priorityPool = this.state.priorityAgents.filter(id => aliveUids.includes(id));

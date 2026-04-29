@@ -17,7 +17,6 @@ export const logger = {
     if (!isProduction) {
       console.error(color('[ERROR]'), ...args);
     } else {
-      // NOTE: PRODUCTION: Replace with real error monitoring service (e.g. Sentry) in the future
       console.error(color('[App Error]'), ...args);
     }
   },

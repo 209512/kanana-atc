@@ -1,19 +1,15 @@
 import { ATC_CONFIG } from '@/constants/atcConfig';
 import { logger } from './logger';
 import { queryClient } from '@/main';
-import { useATCStore } from '@/store/useATCStore';
 import { queryKeys } from '@/constants/queryKeys';
-import { encryptDataAsync, injectSecureHeaders } from '@/utils/secureStorage';
+import { injectSecureHeaders } from '@/utils/secureStorage';
 import { idbService } from './idbService';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
-// NOTE: Background Sync Manager
 export const processOfflineQueue = async () => {
   if (typeof window === 'undefined' || !navigator.onLine) return;
   
-  // NOTE: Prevent crash when IndexedDB access is blocked
-  // NOTE: Prevent crash on restricted IndexedDB access
   let requests = [];
   try {
     requests = await idbService.getOfflineRequests();
@@ -27,13 +23,11 @@ export const processOfflineQueue = async () => {
   logger.log(`[OfflineSync] Found ${requests.length} queued requests. Syncing...`);
   for (const req of requests) {
     try {
-      // NOTE: Ensure we do not re-queue on sync
       await request(req.url, { method: req.method, headers: req.headers, body: req.body, _isSync: true } as any);
       await idbService.removeOfflineRequest(req.id);
       logger.log(`[OfflineSync] Synced request ${req.id}`);
     } catch (e) {
       logger.error(`[OfflineSync] Failed to sync request ${req.id}`, e);
-      // NOTE: Catch logical client errors to prevent infinite sync retry
       if (e instanceof Error) {
          const msg = e.message.toUpperCase();
          const isClientError = msg.startsWith('HTTP_4') || msg.includes('BAD_REQUEST') || msg.includes('UNAUTHORIZED') || msg.includes('INVALID_INPUT') || msg.includes('FORBIDDEN') || msg.includes('CONFIG_ERROR') || msg.includes('INVALID_API_KEY');
@@ -47,7 +41,6 @@ export const processOfflineQueue = async () => {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('online', processOfflineQueue);
-  // NOTE: Attempt sync on load
   setTimeout(processOfflineQueue, 2000);
 }
 
@@ -63,6 +56,16 @@ export const getSafeBaseUrl = (url: string) => {
   return url.startsWith('/') ? url.replace(/\/$/, '') : '/' + url.replace(/\/$/, '');
 };
 
+const isSameOriginUrl = (url: string) => {
+  if (typeof window === 'undefined') return true;
+  try {
+    const u = new URL(url, window.location.origin);
+    return u.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+};
+
 export const initAuth = async (): Promise<string | null> => {
   return queryClient.fetchQuery({
     queryKey: queryKeys.auth(),
@@ -71,7 +74,11 @@ export const initAuth = async (): Promise<string | null> => {
         const baseUrlStr = import.meta.env.VITE_API_BASE_URL || BASE_URL;
         const safeBase = getSafeBaseUrl(baseUrlStr);
         const initUrl = `${safeBase}/init`;
-        const res = await fetch(initUrl);
+        const headers: Record<string, string> = {};
+        if (typeof window !== 'undefined' && isSameOriginUrl(initUrl) && window.localStorage && typeof window.localStorage.getItem === 'function') {
+          await injectSecureHeaders(headers);
+        }
+        const res = await fetch(initUrl, { headers });
         
         if (res.ok) {
           try {
@@ -125,18 +132,34 @@ export const request = async (url: string, options: RequestOptions = {}) => {
   let lastError: Error | null = null;
 
   for (let i = 0; i <= retries; i++) {
-    // NOTE: Intercept offline requests before trying fetch to save battery & time
     if (typeof window !== 'undefined' && !navigator.onLine && !fetchOptions._isSync) {
-       // NOTE: Allow GET requests to just fail, but queue POST/PUT/DELETE for mutations
        if (fetchOptions.method && fetchOptions.method !== 'GET') {
+         const safeHeaders: any = { ...fetchOptions.headers };
+         delete safeHeaders['x-kanana-key'];
+         delete safeHeaders['x-agent-keys'];
+         delete safeHeaders['Authorization'];
+
+         // NOTE: redact sensitive fields in queued body
+         let safeBody = fetchOptions.body;
+         if (typeof safeBody === 'string') {
+           try {
+             const parsed = JSON.parse(safeBody);
+             if (parsed.keys || parsed.apiKey || parsed.credentials) {
+                delete parsed.keys;
+                delete parsed.apiKey;
+                delete parsed.credentials;
+                safeBody = JSON.stringify(parsed);
+             }
+          } catch {}
+         }
+
          await idbService.addOfflineRequest({
            url: finalUrl,
            method: fetchOptions.method,
-           headers: fetchOptions.headers,
-           body: fetchOptions.body
+           headers: safeHeaders,
+           body: safeBody
          });
          logger.log(`[OfflineSync] Queued ${fetchOptions.method} ${finalUrl}`);
-         // NOTE: Return dummy success so the UI can proceed optimistically
          return { success: true, queued: true };
        }
        throw new Error('NETWORK_OFFLINE');
@@ -144,7 +167,6 @@ export const request = async (url: string, options: RequestOptions = {}) => {
 
     const controller = new AbortController();
     
-    // NOTE: Link external AbortSignal if provided
     if (fetchOptions.signal) {
       fetchOptions.signal.addEventListener('abort', () => controller.abort());
       if (fetchOptions.signal.aborted) controller.abort();
@@ -163,8 +185,7 @@ export const request = async (url: string, options: RequestOptions = {}) => {
         ...fetchOptions.headers as Record<string, string>
       };
       
-      if (typeof window !== 'undefined' && window.localStorage && typeof window.localStorage.getItem === 'function') {
-        // NOTE: Inject secure headers without exposing raw keys to XSS
+      if (typeof window !== 'undefined' && isSameOriginUrl(finalUrl) && window.localStorage && typeof window.localStorage.getItem === 'function') {
         await injectSecureHeaders(headers);
       }
 
@@ -179,7 +200,37 @@ export const request = async (url: string, options: RequestOptions = {}) => {
       });
 
       if (!response.ok) {
-          if (response.status === 401) {
+          if (response.status === 401 && !(fetchOptions as any)._authRetry) {
+            queryClient.removeQueries({ queryKey: queryKeys.auth() });
+            const refreshedToken = await initAuth();
+            if (refreshedToken) {
+              headers['Authorization'] = `Bearer ${refreshedToken}`;
+            } else {
+              delete headers['Authorization'];
+            }
+            const retryResponse = await fetch(finalUrl, {
+              ...fetchOptions,
+              headers,
+              signal: controller.signal,
+            });
+            if (retryResponse.ok) {
+              clearTimeout(timeoutId);
+
+              let isStream = false;
+              if (fetchOptions.body && typeof fetchOptions.body === 'string') {
+                try {
+                  const parsed = JSON.parse(fetchOptions.body);
+                  isStream = !!parsed.stream;
+                } catch {
+                }
+              }
+              if (isStream) return retryResponse;
+
+              const data = await retryResponse.json();
+              return data;
+            }
+            queryClient.invalidateQueries({ queryKey: queryKeys.auth() });
+          } else if (response.status === 401) {
             queryClient.invalidateQueries({ queryKey: queryKeys.auth() });
           }
           let errorData;
@@ -189,7 +240,6 @@ export const request = async (url: string, options: RequestOptions = {}) => {
             errorData = {};
           }
           
-          // NOTE: Prevent [object Object] by stringifying nested objects
           let errorMsg = errorData.error || errorData.message;
           if (typeof errorMsg === 'object') {
              errorMsg = JSON.stringify(errorMsg);
@@ -207,7 +257,6 @@ export const request = async (url: string, options: RequestOptions = {}) => {
           const parsed = JSON.parse(fetchOptions.body);
           isStream = !!parsed.stream;
         } catch {
-          // NOTE: Fallback if not JSON
         }
       }
       if (isStream) return response;
@@ -224,12 +273,8 @@ export const request = async (url: string, options: RequestOptions = {}) => {
       const isServerError = error.message.startsWith('HTTP_5') || error.message.includes('SERVICE_TEMPORARILY_UNAVAILABLE');
       const isTimeout = error.name === 'AbortError' || error.message.includes('HTTP_504') || error.message.toLowerCase().includes('timeout');
 
-      // NOTE: Do not retry on non-rate-limit client errors
       if (isClientError && !error.message.includes('HTTP_429') && !error.message.includes('QUOTA_EXCEEDED')) break;
       
-      // NOTE: Retry logic:
-      // NOTE: Server Error (500): Retry up to max retries
-      // NOTE: Timeout (AbortError / 504): Retry up to max retries
       if (isServerError && i >= retries) {
         break;
       } else if (isTimeout && i >= retries) {
