@@ -1,21 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { Brain, X } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
-import { encryptDataAsync } from '@/utils/secureStorage';
+import { encryptDataAsync, SECURE_STORAGE_KEYS } from '@/utils/secureStorage';
 
 export const KananaKeyModal = () => {
   const isDark = useUIStore(s => s.isDark);
   const isOpen = useUIStore(s => s.isKananaKeyModalOpen);
   const close = useUIStore(s => s.closeKananaKeyModal);
 
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const [value, setValue] = useState('');
   const [remember, setRemember] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      const localKeyRaw = window.localStorage.getItem('KANANA_API_KEY');
-      const sessionKeyRaw = window.sessionStorage.getItem('KANANA_API_KEY');
+      previousFocusRef.current = document.activeElement as HTMLElement | null;
+      const localKeyRaw = window.localStorage.getItem(SECURE_STORAGE_KEYS.KANANA_API_KEY);
+      const sessionKeyRaw = window.sessionStorage.getItem(SECURE_STORAGE_KEYS.KANANA_API_KEY);
       
       if (localKeyRaw) {
           setValue("••••••••••••••••");
@@ -27,8 +31,70 @@ export const KananaKeyModal = () => {
           setValue("");
           setRemember(false);
       }
+      setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onMouseDown = (e: MouseEvent) => {
+      const root = modalRef.current;
+      if (!root) return;
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (root.contains(target)) return;
+      close();
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const root = modalRef.current;
+        if (!root) return;
+        const focusables = Array.from(
+          root.querySelectorAll<HTMLElement>(
+            'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        const isShift = e.shiftKey;
+
+        if (!active || !root.contains(active)) {
+          e.preventDefault();
+          first.focus();
+          return;
+        }
+
+        if (isShift && active === first) {
+          e.preventDefault();
+          last.focus();
+          return;
+        }
+
+        if (!isShift && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousFocusRef.current?.focus?.();
+    };
+  }, [isOpen, close]);
 
   if (!isOpen) return null;
 
@@ -38,7 +104,11 @@ export const KananaKeyModal = () => {
       onMouseDown={close}
     >
       <div
+        ref={modalRef}
         onMouseDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="kanana-key-modal-title"
         className={clsx(
           "w-full max-w-sm p-6 rounded-xl shadow-2xl border relative transition-all animate-in zoom-in-95 duration-200",
           isDark ? "bg-[#0d1117] border-cyan-500/30 text-gray-300" : "bg-white border-slate-200 text-slate-800"
@@ -47,13 +117,14 @@ export const KananaKeyModal = () => {
         <button
           onClick={close}
           className="absolute top-3 right-3 opacity-60 hover:opacity-100 p-1 transition-opacity"
+          aria-label="Close"
         >
           <X size={18} />
         </button>
 
         <div className="flex items-center gap-2 mb-3">
           <Brain size={16} className="text-cyan-500" />
-          <h2 className="font-mono font-bold tracking-widest uppercase text-xs">KANANA_API_KEY</h2>
+          <h2 id="kanana-key-modal-title" className="font-mono font-bold tracking-widest uppercase text-xs">KANANA_API_KEY</h2>
         </div>
 
         <p className="text-[11px] opacity-70 leading-relaxed mb-4 break-keep">
@@ -63,6 +134,7 @@ export const KananaKeyModal = () => {
 
         <input
           type="password"
+          ref={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Enter Kanana-o API Key"
@@ -85,8 +157,8 @@ export const KananaKeyModal = () => {
         <div className="grid grid-cols-2 gap-2 mt-4">
           <button
             onClick={() => {
-              sessionStorage.removeItem('KANANA_API_KEY');
-              localStorage.removeItem('KANANA_API_KEY');
+              sessionStorage.removeItem(SECURE_STORAGE_KEYS.KANANA_API_KEY);
+              localStorage.removeItem(SECURE_STORAGE_KEYS.KANANA_API_KEY);
               close();
             }}
             className={clsx(
@@ -102,11 +174,11 @@ export const KananaKeyModal = () => {
               if (trimmed) {
                 const encodedKey = await encryptDataAsync(trimmed);
                 if (remember) {
-                  localStorage.setItem('KANANA_API_KEY', encodedKey);
-                  sessionStorage.removeItem('KANANA_API_KEY');
+                  localStorage.setItem(SECURE_STORAGE_KEYS.KANANA_API_KEY, encodedKey);
+                  sessionStorage.removeItem(SECURE_STORAGE_KEYS.KANANA_API_KEY);
                 } else {
-                  sessionStorage.setItem('KANANA_API_KEY', encodedKey);
-                  localStorage.removeItem('KANANA_API_KEY');
+                  sessionStorage.setItem(SECURE_STORAGE_KEYS.KANANA_API_KEY, encodedKey);
+                  localStorage.removeItem(SECURE_STORAGE_KEYS.KANANA_API_KEY);
                 }
               }
               close();
