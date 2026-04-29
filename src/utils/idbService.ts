@@ -44,7 +44,6 @@ class IndexedDBService {
     return this.dbPromise;
   }
 
-  // NOTE: Offline Sync Queue Methods
   async addOfflineRequest(requestData: { url: string, method: string, headers: any, body: any }): Promise<void> {
     try {
       const db = await this.init();
@@ -53,7 +52,6 @@ class IndexedDBService {
         ...requestData,
         timestamp: Date.now(),
       });
-      logger.log('[OfflineSync] Request queued for later sync');
     } catch (error) {
       logger.error('[OfflineSync] Failed to queue request:', error);
     }
@@ -81,19 +79,19 @@ class IndexedDBService {
     }
   }
 
-  // NOTE: Audit Logs Methods
-
-  async addAuditLog(log: any): Promise<void> {
+  async addAuditLog(log: any): Promise<boolean> {
     try {
       const db = await this.init();
-      if (!db) return;
+      if (!db) return false;
       
       await db.add(STORE_NAME, {
         ...log,
         timestamp: Date.now(),
       });
+      return true;
     } catch (error) {
       logger.error('[IndexedDB] Failed to add audit log:', error);
+      return false;
     }
   }
 
@@ -121,7 +119,6 @@ class IndexedDBService {
     }
   }
 
-  // NOTE: Crypto Methods
   async getCryptoKey(keyName: string): Promise<CryptoKey | null> {
     try {
       const db = await this.init();
