@@ -24,13 +24,13 @@ export async function withApiMiddleware(
   executionCtx?: any
 ): Promise<Response> {
   const origin = req.headers.get('origin') || "";
+  const requestOrigin = new URL(req.url).origin;
   const allowedOrigins = getAllowedOrigins();
   
   const isDev = process.env.NODE_ENV !== 'production';
   const isLocalhost = origin && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'));
-  
-  // NOTE: Allow empty origin for S2S/mobile
-  const isAllowed = !origin || allowedOrigins.includes(origin) || isDev || isLocalhost;
+
+  const isAllowed = !origin || origin === requestOrigin || allowedOrigins.includes(origin) || isDev || isLocalhost;
 
   const corsHeaders = new Headers({
     "Content-Type": "application/json"
@@ -38,8 +38,6 @@ export async function withApiMiddleware(
   if (isAllowed && origin) {
     corsHeaders.set("Access-Control-Allow-Origin", origin);
   }
-
-  // NOTE: CORS Preflight
   if (req.method === "OPTIONS") {
     const responseHeaders = new Headers({
       "Access-Control-Allow-Methods": `${options.allowedMethods.join(', ')}, OPTIONS`,
@@ -51,19 +49,16 @@ export async function withApiMiddleware(
     return new Response(null, { status: 204, headers: responseHeaders });
   }
 
-  // NOTE: CORS Validation
   if (!isAllowed) {
     return new Response(JSON.stringify({ error: "FORBIDDEN_ORIGIN" }), { status: 403, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // NOTE: HTTP Method Validation
   if (!options.allowedMethods.includes(req.method)) {
     return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: corsHeaders });
   }
 
   const clientIp = getClientIp(req);
 
-  // NOTE: IP Ban Check
   if (await isIpBanned(clientIp)) {
     return new Response(JSON.stringify({ 
       error: "FORBIDDEN_IP", 
@@ -73,14 +68,7 @@ export async function withApiMiddleware(
 
   let rateLimitIdentifier = options.rateLimitKeyPrefix ? `${options.rateLimitKeyPrefix}:${clientIp}` : clientIp;
   let authPayload: { jti?: string, [key: string]: unknown } | undefined;
-
-  // NOTE: Authentication Check
   if (options.requireAuth) {
-    if (!process.env.JWT_SECRET) {
-      logger.error("[MIDDLEWARE_ERR] Server configuration error: JWT_SECRET missing");
-      return new Response(JSON.stringify({ error: "INTERNAL_SERVER_ERROR" }), { status: 500 });
-    }
-
     const authResult = await verifyAuthToken(req);
     if (!authResult.valid) {
       return new Response(JSON.stringify({ 
@@ -93,15 +81,12 @@ export async function withApiMiddleware(
     rateLimitIdentifier = `ip:${clientIp}`;
   }
 
-  // NOTE: Rate Limiting Check
   if (!(await checkRateLimit(rateLimitIdentifier, options.rateLimitMaxRequests, clientIp))) {
     return new Response(JSON.stringify({ 
       error: "TOO_MANY_REQUESTS", 
       message: "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요." 
     }), { status: 429, headers: corsHeaders });
   }
-
-  // NOTE: Execute Handler
   try {
     const context: MiddlewareContext = {
       origin,
@@ -112,8 +97,6 @@ export async function withApiMiddleware(
       waitUntil: executionCtx?.waitUntil ? executionCtx.waitUntil.bind(executionCtx) : undefined
     };
     const response = await handler(req, context);
-    
-    // NOTE: Append CORS headers to response
     if (isAllowed && origin) {
       response.headers.set("Access-Control-Allow-Origin", origin);
     }

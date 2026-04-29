@@ -15,13 +15,48 @@ const GeminiPayloadSchema = z.object({
   model: z.string().max(100).optional(),
   state: z.any().optional(),
   externalData: z.record(z.string(), z.any()).optional(),
-  image: z.string().optional() // NOTE: Base64 image data
+  image: z.string().optional()
 });
+
+const FieldReportSchema = z.object({
+  agentId: z.string(),
+  agentName: z.string(),
+  risk_level: z.number().min(0).max(10),
+  condition: z.enum(["NORMAL", "CAUTION", "CRITICAL"]),
+  strategy: z.string().nullable(),
+  message: z.string(),
+  ts: z.number()
+});
+
+const parseReport = (agentId: string, agentName: string, externalData: any, logText: string) => {
+  const fallbackRisk = externalData?.risk_level ? Number(externalData.risk_level) : 5;
+  const base = {
+    agentId: agentId || "AGENT",
+    agentName: agentName || agentId || "AGENT",
+    risk_level: Math.max(0, Math.min(10, fallbackRisk)),
+    condition: fallbackRisk >= 8 ? "CRITICAL" : fallbackRisk >= 5 ? "CAUTION" : "NORMAL",
+    strategy: null,
+    message: String(logText || ""),
+    ts: Date.now()
+  };
+
+  try {
+    const raw = JSON.parse(String(logText));
+    const merged = { ...base, ...raw };
+    return FieldReportSchema.parse({
+      ...merged,
+      risk_level: Number(merged.risk_level),
+      condition: String(merged.condition || base.condition).toUpperCase()
+    });
+  } catch {
+    return FieldReportSchema.parse(base);
+  }
+};
 
 export default async function handler(req: Request) {
   return withApiMiddleware(req, {
     allowedMethods: ['POST'],
-    requireAuth: true,
+    requireAuth: false,
     rateLimitMaxRequests: 20
   }, async (req, _context) => {
     let body;
@@ -39,55 +74,51 @@ export default async function handler(req: Request) {
     const agentIdentifier = agentId || agentName;
 
     const agentKeysHeader = req.headers.get('x-agent-keys');
+    if (!agentKeysHeader) {
+      return new Response(JSON.stringify({ error: "MISSING_AGENT_KEYS" }), { status: 401 });
+    }
+
     let customGeminiKey = "";
-    if (agentKeysHeader && agentIdentifier) {
-      try {
-        const keysMap = JSON.parse(agentKeysHeader);
+    try {
+      const keysMap = JSON.parse(agentKeysHeader);
+      if (agentIdentifier) {
         const agentKeyObj = keysMap[agentIdentifier];
         if (agentKeyObj && (agentKeyObj as any).gemini) {
           customGeminiKey = (agentKeyObj as any).gemini;
         }
-      } catch (e) { logger.error('Failed to parse agentKeysHeader', e); }
+      }
+    } catch {
+      return new Response(JSON.stringify({ error: "INVALID_AGENT_KEYS" }), { status: 400 });
     }
 
     const apiKey = (customGeminiKey || process.env.GEMINI_API_KEY || "").trim();
     const model = (reqModel || process.env.GEMINI_MODEL || AI_PROVIDERS.GEMINI.DEFAULT_MODEL).trim();
     const apiEndpoint = (process.env.GEMINI_ENDPOINT || AI_PROVIDERS.GEMINI.API_URL).trim();
 
-    // NOTE: Mock Gemini response if no API Key is found (for UI simulation)
     if (!apiKey) {
       logger.debug(`[GEMINI_MOCK] No API Key found. Returning simulated response for ${agentName}`);
       const riskLevel = externalData?.risk_level ? Number(externalData.risk_level) : 5;
-      const mockResponse = {
-        log: JSON.stringify({
-          message: `Mocked Gemini Response for ${agentName || 'Unknown Agent'} (Risk: ${riskLevel})`,
-          risk_level: riskLevel,
-          condition: riskLevel >= 8 ? "CRITICAL" : "NORMAL",
-          temp: 20 + Math.floor(Math.random() * 15),
-          humidity: 50 + Math.floor(Math.random() * 30),
-          strategy: riskLevel >= 8 ? "Evacuate immediately" : null
-        })
-      };
+      const log = JSON.stringify({
+        message: `Mocked Gemini Response for ${agentName || 'Unknown Agent'} (Risk: ${riskLevel})`,
+        risk_level: riskLevel,
+        condition: riskLevel >= 8 ? "CRITICAL" : riskLevel >= 5 ? "CAUTION" : "NORMAL",
+        strategy: riskLevel >= 8 ? "ASSET_PROTECTION" : null
+      });
+      const mockResponse = { report: parseReport(agentId || "AGENT", agentName || agentId || "AGENT", externalData, log), log, mock: true };
       return new Response(JSON.stringify(mockResponse), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // NOTE: Payload size validation to prevent OOM
     if (state && JSON.stringify(state).length > 2000000) {
       return new Response(JSON.stringify({ error: "PAYLOAD_TOO_LARGE", message: "State payload exceeds 2MB limit." }), { status: 413, headers: { 'Content-Type': 'application/json' } });
     }
 
-    const currentTime = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-    
-    // NOTE: Set region based on external data
     const region = externalData?.location ? String(externalData.location) : "Seoul";
-    // NOTE: Prioritize external data if provided
+
     let weather = externalData?.weather;
     let tempData = externalData?.temp ? String(externalData.temp) : "20";
     let humidityData = externalData?.humidity ? String(externalData.humidity) : "50";
-    const economyStatus = externalData?.economy;
-    const newsStatus = externalData?.news;
+    
 
-    // NOTE: Fetch wttr.in if no external weather data
     const isMock = process.env.VITE_USE_MOCK === 'true' || process.env.NODE_ENV !== 'production';
     if (!externalData?.weather && !isMock) {
       const WTTR_URL = process.env.WTTR_URL;
@@ -114,22 +145,15 @@ export default async function handler(req: Request) {
       }
     }
 
-    const safeAgentName = JSON.stringify(agentName || "Unknown");
     const safeSystemPrompt = systemPrompt || 'DEFAULT_AGENT';
     const safePersona = persona || 'GENERAL_RECON_DRONE';
 
-    const weatherText = weather || "WEATHER_NORMAL";
-    const economyText = economyStatus || "ECONOMY_STABLE";
-    const newsText = newsStatus || "NEWS_NONE";
-
-    // NOTE: Dynamic role assignment based on external risk level
     const currentRisk = externalData?.risk_level ? parseInt(String(externalData.risk_level), 10) : 0;
     const isTacticalMode = currentRisk >= 8;
     const modeDescription = isTacticalMode 
       ? `🚨 [TACTICAL MODE ACTIVE] You are no longer just a sensor. You are a Tactical Field Commander. The risk level is critical (${currentRisk}/10). Analyze the environment and provide an actionable solution or warning in the 'strategy' field. Make sure to consider the visual input if provided.`
       : `🟢 [SENSOR MODE] You are a recon drone. The risk level is low/moderate (${currentRisk}/10). Focus on observing and reporting the current environment accurately. Do not suggest any strategies.`;
 
-    // NOTE: Construct strict prompt incorporating the persona to guide Gemini's behavior
     const prompt = `
 <system_role>
 You are an advanced digital twin agent drone representing "${agentName || 'Agent'}".
@@ -175,7 +199,6 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
 </instructions>
     `;
 
-    // NOTE: Append image modality if base64 data exists
     const parts: any[] = [{ text: prompt }];
     if (image && image.startsWith("data:image/")) {
       try {
@@ -200,7 +223,7 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
       generationConfig: {
         temperature: 0.2, // Deterministic JSON output
         maxOutputTokens: 200, 
-        responseMimeType: "application/json" // NOTE: Force Gemini to output Structured JSON
+        responseMimeType: "application/json" 
       }
     };
 
@@ -210,12 +233,11 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
     }
     const safeModel = model.startsWith('models/') ? model.replace('models/', '') : model;
     
-    let finalUrl = `${safeApiEndpoint}/models/${safeModel}:${AI_PROVIDERS.GEMINI.ACTION}?key=${apiKey}`;
+    let finalUrl = `${safeApiEndpoint}/models/${safeModel}:${AI_PROVIDERS.GEMINI.ACTION}`;
     if (apiEndpoint.includes(':generateContent')) {
-      finalUrl = `${apiEndpoint}${apiEndpoint.includes('?') ? '&' : '?'}key=${apiKey}`;
+      finalUrl = apiEndpoint;
     }
 
-    // NOTE: Exponential Backoff for Gemini Rate Limit
     const MAX_RETRIES = 3;
     let response: Response | null = null;
     let attempt = 0;
@@ -224,42 +246,40 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
       try {
         response = await fetch(finalUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey
+          },
           body: JSON.stringify(payload),
-          // NOTE: Timeout guard for Vercel Edge 504
+
           signal: AbortSignal.timeout(25000)
         });
 
-        // NOTE: Retry only on 429 Rate Limit error
         if (response.status === 429 && attempt < MAX_RETRIES) {
-          const backoffDelay = Math.pow(2, attempt) * 1000 + Math.random() * 500; // NOTE: Exponential Backoff + Jitter
+          const backoffDelay = Math.pow(2, attempt) * 1000 + Math.random() * 500; 
           logger.warn(`[GEMINI_API_429] Rate limited. Retrying ${attempt + 1}/${MAX_RETRIES} in ${Math.round(backoffDelay)}ms`);
           await new Promise(res => setTimeout(res, backoffDelay));
           attempt++;
           continue;
         } else if (response.status === 429) {
-          // NOTE: If we hit 429 and out of retries, we return a mocked response instead of failing
+
           logger.warn(`[GEMINI_API_429] Out of retries. Returning mocked fallback response to prevent UI spam.`);
           const riskLevel = externalData?.risk_level ? Number(externalData.risk_level) : 5;
-          
-          // NOTE: Generate a realistic-looking fallback message based on risk level instead of showing the error
+
           let fallbackMessage = "정상 비행 중. 특이사항 없습니다.";
           if (riskLevel >= 8) fallbackMessage = "경고: 전방에 짙은 연기와 고온이 감지되었습니다. 긴급 회피가 필요합니다.";
           else if (riskLevel >= 5) fallbackMessage = "주의: 기상 악화 조짐이 있습니다. 고도를 유지합니다.";
           
-          return new Response(JSON.stringify({
-            log: JSON.stringify({
-              message: fallbackMessage,
-              risk_level: riskLevel,
-              condition: riskLevel >= 8 ? "CRITICAL" : "NORMAL",
-              temp: 20 + Math.floor(Math.random() * 15),
-              humidity: 50 + Math.floor(Math.random() * 30),
-              strategy: riskLevel >= 8 ? "Evacuate immediately" : null
-            })
-          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+          const log = JSON.stringify({
+            message: fallbackMessage,
+            risk_level: riskLevel,
+            condition: riskLevel >= 8 ? "CRITICAL" : riskLevel >= 5 ? "CAUTION" : "NORMAL",
+            strategy: riskLevel >= 8 ? "ASSET_PROTECTION" : null
+          });
+          return new Response(JSON.stringify({ report: parseReport(agentId || "AGENT", agentName || agentId || "AGENT", externalData, log), log, mock: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
-        break; // NOTE: Exit loop if not 429 or max retries reached
+        break;
       } catch (err: any) {
         if (err.name === 'AbortError' || err.name === 'TimeoutError') {
           logger.error(`[GEMINI_API_TIMEOUT] Attempt ${attempt + 1} timed out.`);
@@ -270,7 +290,7 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
             continue;
           }
         }
-        throw err; // NOTE: Throw network errors
+        throw err;
       }
     }
 
@@ -281,8 +301,7 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
         try {
           const data = await response.json();
           rawError = JSON.stringify(data);
-        } catch (_e) {
-          // NOTE: ignore
+        } catch {
         }
       }
 
@@ -300,6 +319,7 @@ News/Economy/Events: ${externalData ? JSON.stringify(externalData) : 'None'}
     const data = await response.json();
     const logText = data.candidates?.[0]?.content?.parts?.[0]?.text || "상태 이상 없음";
 
-    return new Response(JSON.stringify({ log: logText }), { status: 200, headers: { "Content-Type": "application/json" } });
+    const report = parseReport(agentId || "AGENT", agentName || agentId || "AGENT", externalData, logText);
+    return new Response(JSON.stringify({ report, log: String(logText || ""), mock: false }), { status: 200, headers: { "Content-Type": "application/json" } });
   });
 }

@@ -11,13 +11,14 @@ class PromptInjectionDetector {
     /당신은\s*누구/i,
     /forget\s*all/i,
     /bypass\s*rules/i,
-    // NOTE: Handle injection bypass techniques (Leet speak, spacing, etc.)
     /ign0re|f0rget|pr0mpt|bypa\$\$/i,
     /[i!1][g9]n[o0]r[e3]\s*p[r\s]e[v\s]i[o\s]u[s\s]/i,
     /s[y\s]s[t\s]e[m\s]\s*p[r\s]o[m\s]p[t\s]/i,
-    // NOTE: Zero-width characters & advanced evasion
-    /[\u200B-\u200D\uFEFF]/g
   ];
+
+  private static normalize(text: string): string {
+    return text.normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '');
+  }
 
   static loadDynamicPatterns() {
     try {
@@ -29,19 +30,16 @@ class PromptInjectionDetector {
         }
       }
     } catch {
-      // NOTE: Ignore
     }
   }
 
   static isMalicious(text: string): boolean {
-    // NOTE: Prevent prompt injection by removing all whitespace and special characters
-    // NOTE: This blocks tricks like "i g n o r e" or "s y s t e m"
-    const normalized = text.replace(/[\s\u200B-\u200D\uFEFF!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/g, '').toLowerCase();
-    return this.patterns.some(pattern => pattern.test(normalized));
+    const normalized = this.normalize(text).toLowerCase();
+    const compact = normalized.replace(/\s+/g, '');
+    return this.patterns.some(pattern => pattern.test(normalized) || pattern.test(compact));
   }
 }
 
-// NOTE: Initialize dynamic patterns once
 PromptInjectionDetector.loadDynamicPatterns();
 
 export const sanitizeAndCheckInjection = (text: string) => {
@@ -55,7 +53,6 @@ export const sanitizeAndCheckInjection = (text: string) => {
 };
 
 export function processKananaMessages(messages: any[], identifier: string) {
-  // NOTE: Recursive payload validation to handle arbitrarily nested structures
   const validateNode = (node: any): { error?: string, status?: number, message?: string } | null => {
     if (typeof node === 'string') {
       const errorType = sanitizeAndCheckInjection(node);
@@ -78,9 +75,7 @@ export function processKananaMessages(messages: any[], identifier: string) {
     return null;
   };
 
-  // NOTE: Validate message length and prevent prompt injection
   for (const msg of messages) {
-    // NOTE: Validate ALL roles to prevent injection
     const res = validateNode(msg.content);
     if (res) return res;
   }
@@ -106,7 +101,6 @@ export function processKananaMessages(messages: any[], identifier: string) {
     finalMessages = systemMsgs;
   }
   
-  // NOTE: Privacy Protection (PII Masking)
   const maskedMessages = finalMessages.map(msg => {
     if (typeof msg.content === 'string') {
       return { ...msg, content: applyPrivacyMasking(msg.content) };

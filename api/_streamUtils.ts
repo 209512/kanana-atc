@@ -1,18 +1,17 @@
-import { logger } from '../src/utils/logger';
+import { logger } from './_logger';
 
 export function createVercelKeepAliveStream(finalUrl: string, apiKey: string, requestBody: any, timeoutMs: number): ReadableStream {
   const encoder = new TextEncoder();
   
   return new ReadableStream({
     async start(controller) {
-      // NOTE: Flush Vercel buffer immediately
+
       controller.enqueue(encoder.encode(": keep-alive\n\n"));
 
-      // NOTE: Ping 5s interval to bypass Vercel 10s Edge Timeout
       const keepAliveInterval = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(": keep-alive\n\n"));
-        } catch (e) {
+        } catch {
           clearInterval(keepAliveInterval);
         }
       }, 5000);
@@ -33,7 +32,7 @@ export function createVercelKeepAliveStream(finalUrl: string, apiKey: string, re
         if (!kakaoResponse.ok) {
           const status = kakaoResponse.status;
           let rawError = "Unknown error";
-          try { rawError = await kakaoResponse.text(); } catch (_) {}
+          try { rawError = await kakaoResponse.text(); } catch {}
           logger.error(`[KANANA_API_ERR] status: ${status}, raw: ${rawError}`);
           controller.enqueue(encoder.encode(`data: {"error": "HTTP_${status}"}\n\n`));
           controller.close();
@@ -52,7 +51,7 @@ export function createVercelKeepAliveStream(finalUrl: string, apiKey: string, re
             reader.releaseLock();
           }
         } else {
-          // NOTE: Convert sync JSON to SSE format for frontend compatibility
+
           const data = await kakaoResponse.json();
           const choice = data.choices?.[0]?.message;
           const payload = {
