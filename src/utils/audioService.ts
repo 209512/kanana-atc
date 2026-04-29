@@ -32,7 +32,6 @@ class AudioService {
             window.removeEventListener('click', initAudio);
           }).catch((err) => {
             logger.error("AudioContext resume failed:", err);
-            // NOTE: Failed to resume, but we should remove the listener to avoid infinite errors on each click
             window.removeEventListener('click', initAudio);
           });
         } else {
@@ -70,8 +69,6 @@ class AudioService {
     return new Promise((resolve) => {
       if (!this.isActivated) return resolve();
       const ctx = this.getContext();
-      
-      // NOTE: Resolve immediately if audio context is suspended to prevent deadlock
       if (ctx.state === 'suspended') {
           logger.warn("AudioContext is suspended. Skipping PCM playback to prevent queue deadlock.");
           return resolve();
@@ -81,8 +78,6 @@ class AudioService {
         const binaryString = window.atob(base64Data);
         const len = binaryString.length;
         const bytes = new Int16Array(len / 2);
-        
-        // NOTE: COMPATIBILITY: Parse 16-bit PCM as little-endian safely via DataView
         const buffer = new ArrayBuffer(len);
         const view = new DataView(buffer);
         for (let i = 0; i < len; i++) {
@@ -172,8 +167,6 @@ class AudioService {
       logger.warn("Audio playback error in play method:", e);
     }
   }
-  
-  // NOTE: MEMORY: Explicitly close AudioContext to prevent memory leaks during long sessions
   public async close() {
     if (this.ctx && this.ctx.state !== 'closed') {
       try {
@@ -188,20 +181,14 @@ class AudioService {
       }
     }
   }
-
-  // NOTE: QUEUE: Push Base64 PCM data to audio queue (Kanana-O 24kHz standard)
   async playPCM(base64Data: string, sampleRate: number = 24000) {
     this.audioQueue.push({ type: 'pcm', data: base64Data, sampleRate });
     this.processQueue();
   }
-
-  // NOTE: FALLBACK: Queue Web Speech API TTS for Lite Version
   playTTS(text: string, lang: string = 'ko-KR') {
     this.audioQueue.push({ type: 'tts', data: text, lang });
     this.processQueue();
   }
-
-  // NOTE: STOP: Force stop all currently playing audio and clear queue
   stopAll() {
     this.audioQueue = [];
     if (this.ctx && this.ctx.state === 'running') {

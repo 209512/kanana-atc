@@ -1,7 +1,6 @@
 import { mergeAgentsWorker, mergeStateWorker, BufferedAgent, BufferedState } from './streamMerger.logic';
 import { Agent, ATCState } from '../contexts/atcTypes';
 
-
 let prevAgents: Agent[] = [];
 let prevState: ATCState = {
   logs: [],

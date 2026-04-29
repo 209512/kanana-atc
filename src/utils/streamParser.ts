@@ -39,8 +39,6 @@ export const parseStreamChunk = (
           }
         }
       } catch (e) {
-        // NOTE: If JSON.parse fails on a complete line (ended with newline), the payload is malformed
-        // NOTE: Skip corrupted line to prevent infinite loop
         console.warn('Failed to parse SSE data chunk', e);
       }
       currentBuffer = currentBuffer.slice(newlineIndex + 1);
