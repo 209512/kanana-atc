@@ -7,10 +7,8 @@ import { useUIStore } from '@/store/useUIStore';
 import { useCategorizedAgents } from '@/hooks/agent/useCategorizedAgents';
 import { Tooltip } from '@/components/common/Tooltip';
 import { AgentRow } from './QueueAgentRow';
-import { useTranslation } from 'react-i18next';
 
 export const QueueDisplay = () => {
-    const { t } = useTranslation();
     const state = useATCStore(s => s.state);
     const isDark = useUIStore(s => s.isDark);
     const setQueueOpen = useUIStore(s => s.setQueueOpen);
@@ -58,7 +56,6 @@ export const QueueDisplay = () => {
                 )} 
                 style={windowWidth >= 768 ? { left: 20, top: 20 } : undefined}
             >
-                {/* Header */}
                 <div className={clsx(
                     "p-2 border-b flex justify-between items-center queue-handle cursor-move h-10 shrink-0 select-none", 
                     isDark ? "bg-gray-800/40 border-gray-800" : "bg-white/60 border-slate-200/40"
@@ -93,7 +90,6 @@ export const QueueDisplay = () => {
                     </div>
                 </div>
 
-                {/* Content Area */}
                 <div className={clsx("p-3 space-y-5 overflow-y-auto custom-scrollbar font-mono text-[11px]", !isOpen && "hidden")}>
                     <section>
                         <Tooltip content="Active Controller Node" position="right">

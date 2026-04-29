@@ -7,15 +7,11 @@ import { THEME_COLORS } from '@/components/monitoring/terminal/terminalConfigs';
 
 export const ProposalBanner = () => {
     const isDark = useUIStore(s => s.isDark);
-    
-    // NOTE: Optimize re-renders by selecting specific properties
     const pendingProposals = useATCStore(s => s.state.pendingProposals);
     const agents = useATCStore(s => s.agents);
     const approveProposals = useATCStore(s => s.approveProposals);
     const rejectProposals = useATCStore(s => s.rejectProposals);
     const clearProposals = useATCStore(s => s.clearProposals);
-
-    // NOTE: Auto-dismiss banner after 30 seconds if ignored
     useEffect(() => {
         if (pendingProposals && pendingProposals.size > 0) {
             const timer = setTimeout(() => {
@@ -36,7 +32,7 @@ export const ProposalBanner = () => {
         return a.uuid.toUpperCase() === searchId || 
               (a.displayName && a.displayName.toUpperCase() === searchId) ||
               a.id.toUpperCase() === searchId ||
-              (a.name && a.name.toUpperCase() === searchId); // NOTE: Match by exact name as well
+              (a.name && a.name.toUpperCase() === searchId);
     });
 
     const displayName = primaryProposal.targetId === 'SYSTEM' 
@@ -44,8 +40,6 @@ export const ProposalBanner = () => {
         : (targetAgent?.displayName || targetAgent?.name || primaryProposal.targetId);
 
     const isMultiple = pendingProposals.size > 1;
-    
-    // NOTE: Force clearProposals to also remove the AI visual effects if ignored/timeout
     const handleReject = () => {
         rejectProposals();
     };
@@ -60,7 +54,6 @@ export const ProposalBanner = () => {
                 )}
                 style={{ boxShadow: `0 0 30px ${theme.glow}` }} 
             >
-                {/* Header Section */}
                 <div className={clsx(
                     "px-4 py-2 border-b flex items-center justify-between",
                     theme.bg,
@@ -74,7 +67,6 @@ export const ProposalBanner = () => {
                     </div>
                 </div>
 
-                {/* Body Section */}
                 <div className="p-4 flex gap-4">
                     <div className={clsx(
                         "rounded-lg p-3 flex items-center justify-center shrink-0",
@@ -111,7 +103,6 @@ export const ProposalBanner = () => {
                     </div>
                 </div>
 
-                {/* Action Buttons */}
                 <div className={clsx("grid grid-cols-2 border-t", isDark ? "border-white/5" : "border-slate-100")}>
                     <button data-testid="proposal-ignore-btn" onClick={handleReject} className="py-3 text-[11px] font-bold text-zinc-500 hover:bg-red-500/10 hover:text-red-500 transition-colors flex items-center justify-center gap-2">
                         <X size={14} /> IGNORE

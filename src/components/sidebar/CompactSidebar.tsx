@@ -90,7 +90,6 @@ export const CompactSidebar = ({ onOpenSettings }: Props) => {
 
     return (
         <div className="flex flex-col h-full w-full items-center py-4 space-y-6 opacity-100 transition-opacity duration-200">
-            {/* Top: Takeover / Waveform Icon */}
             <Tooltip content={isHuman ? "RELEASE CONTROL" : "MANUAL OVERRIDE"} position="left">
                 <button 
                     onClick={handleTakeover}
@@ -105,9 +104,7 @@ export const CompactSidebar = ({ onOpenSettings }: Props) => {
                 </button>
             </Tooltip>
 
-            {/* Middle: Agent Mini List (Attention Needed Only) */}
             <div className="flex-1 w-full overflow-y-auto custom-scrollbar flex flex-col items-center gap-3">
-                {/* Total Active Agents Badge */}
                 <Tooltip content={`Total Agents: ${agents.length}`} position="left">
                     <div className={clsx(
                         "w-8 h-8 rounded-full flex flex-col items-center justify-center border transition-all cursor-pointer",
@@ -152,7 +149,6 @@ export const CompactSidebar = ({ onOpenSettings }: Props) => {
                 })}
             </div>
 
-            {/* Bottom: Settings & Status */}
             <div className="flex flex-col items-center gap-3 shrink-0 pb-2">
                 <AIControlGroup variant="sidebar" isCompact={true} />
                 

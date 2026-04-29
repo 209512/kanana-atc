@@ -3,9 +3,14 @@ import clsx from 'clsx';
 import { Flame, CloudRain, Briefcase, Zap, X, Send } from 'lucide-react';
 import { logger } from '@/utils/logger';
 import { useTranslation } from 'react-i18next';
+import { useUIStore } from '@/store/useUIStore';
+import { useATCStore } from '@/store/useATCStore';
 
 export const DebugPanel = () => {
     const { t } = useTranslation();
+    const sidebarWidth = useUIStore(s => s.sidebarWidth);
+    const isSidebarCollapsed = useUIStore(s => s.isSidebarCollapsed);
+    const agents = useATCStore(s => s.agents);
     const [isVisible, setIsVisible] = useState(false);
     const [isInjecting, setIsInjecting] = useState(false);
     const [customEvent, setCustomEvent] = useState("");
@@ -31,23 +36,24 @@ export const DebugPanel = () => {
         if (isInjecting) return;
         setIsInjecting(true);
 
-        let payload = {};
+        const targetId = agents?.[0]?.uuid;
+        let payload: any = { targetId };
         switch (type) {
             case 'FIRE':
-                payload = { news: "도심 3구역 대형 화재 발생 및 유독가스 확산 중" };
+                payload = { ...payload, eventType: "URBAN_FIRE", severity: "CRITICAL", news: "도심 3구역 대형 화재 발생 및 유독가스 확산 중" };
                 break;
             case 'STORM':
-                payload = { weather: "초강력 태풍 북상, 풍속 30m/s 이상, 전 구역 비행 주의" };
+                payload = { ...payload, eventType: "STORM_WARNING", severity: "CAUTION", weather: "초강력 태풍 북상, 풍속 30m/s 이상, 전 구역 비행 주의" };
                 break;
             case 'ECONOMY':
-                payload = { economy: "글로벌 금융 위기로 코스피 5% 급락, 자산 보호 프로토콜 요망" };
+                payload = { ...payload, eventType: "ECONOMY_CRITICAL", severity: "CAUTION", economy: "글로벌 금융 위기로 코스피 5% 급락, 자산 보호 프로토콜 요망" };
                 break;
             case 'CUSTOM':
                 if (!customEvent.trim()) {
                     setIsInjecting(false);
                     return;
                 }
-                payload = { custom: customEvent.trim() };
+                payload = { ...payload, eventType: customEvent.trim(), severity: "CAUTION", custom: customEvent.trim() };
                 break;
             default:
                 break;
@@ -72,8 +78,14 @@ export const DebugPanel = () => {
 
         if (!isVisible || import.meta.env.VITE_USE_MSW === 'false') return null;
 
+        const rightOffset = (isSidebarCollapsed ? 64 : sidebarWidth) + 16;
+        const maxWidth = `calc(100vw - ${rightOffset + 16}px)`;
+
         return (
-            <div className="fixed bottom-4 right-4 z-50 bg-black/90 border border-red-500/50 rounded-xl p-4 shadow-[0_0_20px_rgba(239,68,68,0.2)] backdrop-blur-md text-white font-mono text-xs w-80">
+            <div
+                className="fixed bottom-4 z-[90] bg-black/90 border border-red-500/50 rounded-xl p-4 shadow-[0_0_20px_rgba(239,68,68,0.2)] backdrop-blur-md text-white font-mono text-xs w-80"
+                style={{ right: rightOffset, maxWidth }}
+            >
                 <div className="flex items-center justify-between border-b border-red-500/30 pb-2 mb-3">
                     <div className="flex items-center gap-2 text-red-400 font-bold">
                         <Zap size={14} className="animate-pulse" />

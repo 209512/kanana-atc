@@ -22,7 +22,7 @@ export const AgentList = () => {
         toggleGlobalStop, updatePriorityOrder 
     } = useTacticalActions();
 
-    const { priorityAgents, normalAgents, priorityIds } = useCategorizedAgents();
+    const { priorityAgents, normalAgents } = useCategorizedAgents();
 
     const renderAgentItem = (agent: Agent, isPrioritySection: boolean) => {
         return (
@@ -49,7 +49,7 @@ export const AgentList = () => {
     };
 
     return (
-        <div className="space-y-4 select-none pb-40 px-1">
+        <div className="space-y-4 select-none pb-40 px-1 tour-agent-list">
             <div className="flex justify-end mb-6 px-1">
                 <Tooltip content={state?.globalStop ? "Resume All" : "Halt All"} position="bottom-left">
                     <button 
@@ -70,7 +70,6 @@ export const AgentList = () => {
             </div>
 
             <div className="space-y-8">
-                {/* Priority Section */}
                 <section>
                     <Tooltip content="Priority Queue (Drag Sort)" position="bottom-right">
                         <label className="text-[10px] font-black text-yellow-500 mb-2 px-1 flex items-center gap-1.5 uppercase tracking-[0.2em]">
@@ -82,7 +81,6 @@ export const AgentList = () => {
                     </Reorder.Group>
                 </section>
 
-                {/* Normal Section */}
                 <section>
                     <Tooltip content="Standard Rotation Nodes" position="bottom-right">
                         <label className="text-[10px] font-black text-gray-500 mb-2 px-1 flex items-center gap-1.5 uppercase tracking-[0.2em]">

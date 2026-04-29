@@ -4,8 +4,6 @@ import { useRef, useEffect } from 'react';
 import { useUIStore } from '@/store/useUIStore';
 import { RADAR_CONFIG } from './radarConfig';
 
-
-
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
 const tempTargetVec = new THREE.Vector3();

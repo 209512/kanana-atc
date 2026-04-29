@@ -17,8 +17,6 @@ export const TerminalLog = () => {
   const isAdminMuted = useATCStore(s => s.isAdminMuted);
   const toggleAdminMute = useATCStore(s => s.toggleAdminMute);
   const isAiMode = useATCStore(s => s.isAiMode);
-
-  // NOTE: State to reset Draggable position on window resize
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   useEffect(() => {
       const handleResizeWindow = () => setWindowWidth(window.innerWidth);
@@ -39,15 +37,11 @@ export const TerminalLog = () => {
   const nodeRef = useRef<HTMLDivElement>(null);
 
   const [isResizing, setIsResizing] = useState(false);
-
-  // NOTE: State to prevent render lag during drag
   const [isDragging, setIsDragging] = useState(false);
 
   const handleResize = useCallback((e: MouseEvent) => {
     if (!nodeRef.current) return;
     const rect = nodeRef.current.getBoundingClientRect();
-    
-    // NOTE: Prevent re-rendering during resize by manipulating DOM directly
     const newWidth = Math.max(230, e.clientX - rect.left);
     const newHeight = Math.max(140, e.clientY - rect.top);
     nodeRef.current.style.width = `${newWidth}px`;
@@ -58,8 +52,6 @@ export const TerminalLog = () => {
     const stopResizing = () => {
       setIsResizing(false);
       document.body.style.cursor = 'default';
-      
-      // NOTE: Update React state with final DOM dimensions to prevent reset on re-render
       if (nodeRef.current) {
         setDimensions({
           width: parseInt(nodeRef.current.style.width || String(dimensions.width), 10),
@@ -94,16 +86,10 @@ export const TerminalLog = () => {
       'POLICY': 'POLICY'
     };
     agents.forEach(a => {
-      // NOTE: Prioritize short displayId, then displayName, then name
       let name = a.displayId || a.displayName || a.name;
-      
-      // NOTE: If no name is set, and original id is UUID
-      // NOTE: Prevent UUID exposure by falling back to agentName or Unknown
       if (!name && a.id) {
-        name = a.id; // NOTE: Used for mapping only, filtered out during render
+        name = a.id;
       }
-      
-      // NOTE: Map UUIDs and IDs to pretty names for log message replacement
       if (a.uuid) map[a.uuid] = name as string;
       if (a.id) map[a.id] = name as string;
     });
@@ -121,8 +107,6 @@ export const TerminalLog = () => {
         return isCurrentFilter || !isExcluded;
       });
     }
-    
-    // NOTE: Return raw data without UUID replacement (string ops done in LogItem)
     return results.slice(-ATC_CONFIG.LOGS.MAX_DISPLAY);
   }, [logs, filter, excludedTypes]);
 
@@ -162,7 +146,6 @@ export const TerminalLog = () => {
         ref={nodeRef} 
         className={clsx(
           "fixed z-50 flex flex-col font-mono pointer-events-auto touch-none",
-          // NOTE: Apply transition only when not dragging to prevent lag
           !isDragging && "transition-[width,height,filter,box-shadow]",
           windowWidth < 768 && "!bottom-[120px] !top-auto !left-2 !right-2 !w-auto !rounded-2xl ![transform:none]"
         )}
@@ -215,28 +198,22 @@ export const TerminalLog = () => {
               >
                 <div className="flex flex-col w-full min-h-full">
                   {filteredLogs.map((log) => {
-                    // NOTE: Perform string ops only at render time (LogItem handles memoization)
                     let cleanMessage = log.message;
                     Object.entries(agentNameMap).forEach(([uuid, name]) => {
                       if (uuid && !['SYSTEM', 'USER', 'ADMIN', 'POLICY'].includes(uuid.toUpperCase())) {
-                        // NOTE: Use case-insensitive regex to prevent [HIDDEN_ID] issues
                         const regex = new RegExp(uuid, 'gi');
                         cleanMessage = cleanMessage.replace(regex, name);
                       }
                     });
-                    
-                    // NOTE: Defensive code for lowercase agentId
                     let mappedName = log.agentId;
                     if (log.agentId && !['SYSTEM', 'USER', 'ADMIN', 'POLICY'].includes(log.agentId.toUpperCase())) {
                       const foundName = Object.entries(agentNameMap).find(([k]) => k.toLowerCase() === log.agentId?.toLowerCase())?.[1];
                       mappedName = foundName || log.agentName;
-                      
-                      // NOTE: If it's still missing and it's a Kanana AI response, fall back to SYSTEM
                       if (!mappedName || mappedName === 'Agent-Unknown') {
                         if (log.type === 'insight' || log.type === 'exec' || log.type === 'proposal') {
                           mappedName = 'SYSTEM'; 
                         } else {
-                          mappedName = 'Agent-Unknown'; // NOTE: Never expose UUID
+                          mappedName = 'Agent-Unknown';
                         }
                       }
                     }
