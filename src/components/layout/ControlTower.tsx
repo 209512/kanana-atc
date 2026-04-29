@@ -13,7 +13,6 @@ export const ControlTower = () => {
 
     return (
         <>
-            {/* Panel Restore Buttons (FABs) */}
             <div 
                 className="absolute top-20 flex flex-col gap-2 z-40 pointer-events-none transition-all duration-300 md:right-[calc(var(--sidebar-width)+16px)] right-[80px]" 
                 style={{ '--sidebar-width': `${actualSidebarWidth}px` } as React.CSSProperties}

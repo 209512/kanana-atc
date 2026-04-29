@@ -15,22 +15,21 @@ export const ATCInitializer: React.FC<{ children: React.ReactNode }> = ({ childr
   const addLog = useATCStore(s => s.addLog);
   
   const { scaleAgents } = useAgentMutations();
-  
-  // NOTE: Stream Initialization
   useATCStream();
-
-  // NOTE: Audio Initialization
   const { playAlert, playSuccess, playClick } = useAudio(isAdminMuted);
   
   useEffect(() => {
     useATCStore.setState({ playAlert, playSuccess, playClick });
   }, [playAlert, playSuccess, playClick]);
-
-  // NOTE: Autonomy Risk Calculation
   const { riskScore, autonomyLevel, recordAction, checkDeltaSafety } = useAutonomy(state, agents, addLog);
   
   useEffect(() => {
-    useATCStore.setState({ riskScore, autonomyLevel, recordAction });
+    useATCStore.setState((s) => ({
+      riskScore,
+      autonomyLevel,
+      recordAction,
+      state: s.state
+    }));
   }, [riskScore, autonomyLevel, recordAction]);
 
   useEffect(() => {

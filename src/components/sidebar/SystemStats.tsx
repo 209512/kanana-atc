@@ -52,22 +52,18 @@ export const SystemStats = () => {
 
     return (
         <div className="space-y-6 min-w-0 select-none overflow-hidden">
-            {/* System Congestion Section */}
             <div className="space-y-3 min-w-0 flex flex-col h-[74px]">
                 <div className={clsx(
                     "flex items-center gap-2 px-1 h-4 whitespace-nowrap",
                     isDark ? "text-gray-500" : "text-slate-400"
                 )}>
-                    {/* CPU Icon */}
                     <Cpu size={12} className="shrink-0" />
             
-                    {/* Congestion Label */}
                     <div className="text-[10px] font-black uppercase tracking-[0.15em] shrink-0">
                         <Tooltip content="Traffic Capacity Management" position="bottom">Congestion</Tooltip>
                     </div>
 
                     <div className="flex-1" />
-                    {/* Warning Text */}
                     <AnimatePresence>
                         {currentValue <= minRequired && priorityAgentsCount > 0 && (
                             <motion.span 
@@ -81,7 +77,6 @@ export const SystemStats = () => {
                         )}
                     </AnimatePresence>
                     
-                    {/* Active Agents Ratio */}
                     <div className="shrink-0">
                         <Tooltip content={`Active Slots: ${currentValue}`} position="bottom-left">
                             <span className={clsx(
@@ -113,7 +108,6 @@ export const SystemStats = () => {
                 </div>
             </div>
 
-            {/* Sector Scan Section */}
             <div className="space-y-3 min-w-0 flex flex-col">
                 <div className="flex justify-between items-center min-w-0 px-1 h-5 overflow-hidden">
                     <label className={clsx("text-[10px] font-black uppercase tracking-[0.15em] flex items-center gap-2 min-w-0 shrink-0 whitespace-nowrap", isDark ? "text-gray-500" : "text-slate-400")}>

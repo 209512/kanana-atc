@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { X, Pause, Activity, Cpu, Database, Edit2, Save } from 'lucide-react';
 import Draggable from 'react-draggable'; 
 import clsx from 'clsx';
-import { useTranslation } from 'react-i18next';
 import { Agent } from '@/contexts/atcTypes';
 import { useATCStore } from '@/store/useATCStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -29,7 +28,6 @@ export const AgentDetailPopup = ({
     agent, onClose, isDark, 
     isCompact = false
 }: AgentDetailPopupProps) => {
-    const { t } = useTranslation();
     const state = useATCStore(s => s.state);
     const { onTogglePause, onTransferLock, togglePriority, terminateAgent } = useTacticalActions();
     const { isPaused, isForced, statusLabel, isLocked } = useAgentLogic(agent as Agent, state);
@@ -78,13 +76,11 @@ export const AgentDetailPopup = ({
                     (isDark ? "bg-[#0d1117]/95 border-gray-700 text-gray-300" : "bg-white/95 border-slate-300 text-slate-700")
                 )}
                 style={{ 
-                    // NOTE: Responsive positioning to prevent off-screen overflow
                     right: typeof window !== 'undefined' && window.innerWidth < 768 ? '16px' : (isCompact ? '80px' : `calc(${actualSidebarWidth}px + 80px)`), 
                     top: '48px',
                     maxWidth: 'calc(100vw - 32px)' // Ensure it never exceeds screen width
                 }}
             >
-                {/* Drag Handle Area */}
                 <div className="drag-handle flex justify-between items-center p-4 pb-2 cursor-move border-b border-gray-500/20">
                     <div className="flex items-center gap-2 overflow-hidden w-full max-w-[200px]">
                         <Activity size={14} className="shrink-0" style={{ color: isLocked ? LOG_LEVELS.success.color : LOG_LEVELS.info.color }} />
@@ -144,7 +140,6 @@ export const AgentDetailPopup = ({
                             <span className="text-gray-400 truncate max-w-[110px]">{agent.model || 'DEFAULT'}</span>
                         </div>
 
-                        {/* Custom Telemetry (Gemini) */}
                         {(agent as any).state?.temp !== undefined && (
                             <div className="flex justify-between items-center border-t border-gray-500/20 pt-1 mt-1">
                                 <span className="opacity-50">Temp</span>

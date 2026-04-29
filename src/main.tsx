@@ -7,8 +7,6 @@ import { logger } from './utils/logger'
 import { errorTracker } from './utils/errorTracker'
 import { ATCInitializer } from '@/components/layout/ATCInitializer'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-
-// NOTE: Initialize centralized error tracker
 errorTracker.init();
 
 export const queryClient = new QueryClient({
@@ -21,7 +19,6 @@ export const queryClient = new QueryClient({
 });
 
 async function enableMocking() {
-  // NOTE: MSW is ALWAYS required for this project regardless of environment
   const { worker } = await import('./mocks/browser');
   const { http, HttpResponse } = await import('msw');
   
@@ -44,7 +41,11 @@ async function enableMocking() {
         url.includes('cdn.jsdelivr.net') ||
         url.includes('chrome-extension') ||
         url.includes('.vite') ||
-        url.includes('src/')
+        url.includes('src/') ||
+        url.includes('/assets/') ||
+        url.includes('.svg') ||
+        url.includes('.js') ||
+        url.includes('.css')
       ) {
         return;
       }

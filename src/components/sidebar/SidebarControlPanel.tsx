@@ -29,12 +29,11 @@ export const SidebarControlPanel = () => {
 
     return (
         <div className={clsx(
-            "p-2 border-b z-20 relative shrink-0 flex gap-1.5 h-20 items-center",
+            "p-2 border-b z-20 relative shrink-0 flex gap-1.5 h-20 items-center tour-ai-autonomy",
             isDark ? "border-gray-800 bg-gray-900/50" : "border-slate-200 bg-slate-50/50"
         )}>
             <AIControlGroup variant="sidebar" />
             
-            {/* EMERGENCY TAKEOVER */}
             <div className="flex-1 h-[60px]">
                 <Tooltip content={isHuman ? "Release Control" : "Force Takeover"} position="bottom" className="w-full h-full">
                     <button onClick={isHuman ? () => releaseLock.mutate() : handleOverride} disabled={isOverrideLoading}

@@ -18,7 +18,6 @@ interface AgentActionButtonsProps {
     tooltipPosition?: 'top' | 'bottom' | 'left' | 'right' | 'bottom-left' | 'bottom-right';
 }
 
-
 const proposedStyle = "ring-2 ring-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.6)] animate-[pulse_1s_infinite] scale-110 z-10";
 
 export const RenameButton = ({ 
@@ -87,7 +86,6 @@ export const AgentActionButtons = ({
             "flex items-center gap-1", 
             layout === 'compact' ? "justify-end w-full" : ""
         )}>
-            {/* Rename Button */}
             {onStartRename && (
                 <RenameButton 
                     onClick={(e) => { e.stopPropagation(); onStartRename(targetUuid); }}
@@ -95,7 +93,6 @@ export const AgentActionButtons = ({
                 />
             )}
 
-            {/* Priority Button */}
             <Tooltip content={isPriorityProposed ? "AI RECOMMEND: Priority" : (isPriority ? "Revoke Priority" : "Grant Priority")} position={tooltipPosition}>
                 <button 
                     onClick={(e) => { e.stopPropagation(); onTogglePriority(targetUuid, !isPriority); }} 
@@ -108,7 +105,6 @@ export const AgentActionButtons = ({
                 </button>
             </Tooltip>
 
-            {/* Pause/Resume Button */}
             <Tooltip content={isPauseProposed || isResumeProposed ? "AI RECOMMEND: State Change" : (isPaused ? "Resume" : "Pause")} position={tooltipPosition}>
                 <button 
                     onClick={(e) => { e.stopPropagation(); onTogglePause(targetUuid, isPaused); }} 
@@ -120,7 +116,6 @@ export const AgentActionButtons = ({
                 </button>
             </Tooltip>
 
-            {/* Seize (Transfer) Button */}
             <Tooltip content={isTransferProposed ? "AI RECOMMEND: Force Seize" : "Transfer Lock"} position={tooltipPosition}>
                 <button 
                     onClick={(e) => { e.stopPropagation(); onTransferLock(targetUuid); }} 
@@ -132,7 +127,6 @@ export const AgentActionButtons = ({
                 </button>
             </Tooltip>
 
-            {/* Terminate Button */}
             <Tooltip content={isTerminateProposed ? "AI RECOMMEND: Termination" : "Terminate"} position={tooltipPosition}>
                 <button 
                     onClick={(e) => { e.stopPropagation(); onTerminate(targetUuid); }} 

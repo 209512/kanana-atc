@@ -45,13 +45,11 @@ export const SidebarContainer = () => {
                     )}
                     style={{ width: actualWidth }}
                 >
-                {/* Resizer */}
                 {!isSidebarCollapsed && (
                     <div 
                         onMouseDown={handleMouseDown}
                         className="absolute top-0 bottom-0 left-[-8px] w-4 cursor-col-resize z-[60] group"
                     >
-                        {/* Guide Lines */}
                         <div className={clsx(
                             "absolute right-[7px] top-0 bottom-0 w-[1.5px] transition-colors",
                             isResizing 
@@ -61,7 +59,6 @@ export const SidebarContainer = () => {
                     </div>
                 )}
 
-                {/* Toggle Collapse Button */}
                 <button
                     onClick={toggleSidebar}
                     className={clsx(
@@ -84,7 +81,6 @@ export const SidebarContainer = () => {
                             <AgentList />
                         </div>
 
-                        {/* Footer Info */}
                         <div className={clsx(
                             "p-3 border-t text-[10px] font-mono flex justify-between items-center gap-4 min-w-0 shrink-0",
                             isDark ? "border-gray-800 bg-[#0b0e14] text-gray-600" : "border-slate-200 bg-white text-slate-400"

@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useMemo, useEffect } from 'react';
+import React, { Suspense, useMemo, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -12,7 +12,6 @@ import { useAgentMutations } from '@/hooks/api/useAgentMutations';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 
-
 import { createPortal } from 'react-dom';
 
 const AgentDrone = React.lazy(() => import('@/components/monitoring/radar/AgentDrone').then(m => ({ default: m.AgentDrone })));
@@ -20,8 +19,6 @@ const RadarBackground = React.lazy(() => import('@/components/monitoring/radar/R
 const CentralHub = React.lazy(() => import('@/components/monitoring/radar/CentralHub').then(m => ({ default: m.CentralHub })));
 const AgentDetailPopup = React.lazy(() => import('@/components/monitoring/radar/AgentDetailPopup').then(m => ({ default: m.AgentDetailPopup })));
 const CameraController = React.lazy(() => import('@/components/monitoring/radar/CameraController').then(m => ({ default: m.CameraController })));
-
-// NOTE: Scene Cleanup Component to prevent WebGL memory leaks
 const SceneCleanup = ({ isDark }: { isDark: boolean }) => {
     const { scene, gl } = useThree();
     
@@ -60,11 +57,7 @@ const SceneCleanup = ({ isDark }: { isDark: boolean }) => {
     
     return null;
 };
-
-// NOTE: Fallback UI for a crashed individual AgentDrone
 const AgentDroneFallback = ({ agentId, isDark }: { agentId: string, isDark: boolean }) => {
-    // NOTE: Determine static position based on agentId to keep the fallback in place
-    // NOTE: Extracting numbers from UUID to simulate position deterministic behavior
     const seed = parseInt(agentId.replace(/[^0-9]/g, '').slice(0, 4) || '1') || 1;
     const radius = 5 + (seed % 3) * 2.8;
     const angle = seed * (Math.PI * 2 / 5);
@@ -187,7 +180,7 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
                 </Suspense>
             </Canvas>
             
-            {/* Static UI Overlay: Rendered via Portal to break out of 3D Canvas z-index context and prevent mobile UI overlap */}
+            {/* NOTE: Portal overlay (Canvas z-index) */}
             {selectedAgentId && agents.find(a => a.id === selectedAgentId || a.uuid === selectedAgentId || a.displayId === selectedAgentId) && (
                 typeof document !== 'undefined' ? createPortal(
                     <div className="absolute inset-0 z-[100] pointer-events-none w-full h-full overflow-hidden">
@@ -208,8 +201,7 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
                 ) : null
             )}
             
-            {/* NOTE: Removed A11yAnnouncer as it causes "Cannot update an unmounted root" errors in React 18 Strict Mode and HMR */}
-            {/* <A11yAnnouncer /> */}
+            {/* TODO: re-enable A11yAnnouncer (StrictMode/HMR root unmount) */}
         </div>
     );
 };

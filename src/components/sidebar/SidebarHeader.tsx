@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import clsx from 'clsx';
-import { ShieldAlert, Activity, Settings, Volume2, VolumeX, Camera, Loader2 } from 'lucide-react';
+import { ShieldAlert, Activity, Settings, Volume2, VolumeX, Camera, Loader2, HelpCircle } from 'lucide-react';
 import { Tooltip } from '@/components/common/Tooltip';
 import { useATCStore } from '@/store/useATCStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -17,6 +17,7 @@ export const SidebarHeader = ({ onOpenSettings }: { onOpenSettings: () => void }
     
     const isDark = useUIStore(s => s.isDark);
     const setIsDark = useUIStore(s => s.setIsDark);
+    const startTour = useUIStore(s => s.startTour);
     const overrideSignal = useATCStore(s => s.state.overrideSignal);
     
     const isHuman = holder === 'USER' || overrideSignal;
@@ -138,8 +139,14 @@ export const SidebarHeader = ({ onOpenSettings }: { onOpenSettings: () => void }
                     </button>
                 </Tooltip>
 
+                <Tooltip content="Guide & Help" position="bottom">
+                    <button onClick={startTour} className="p-2 rounded-md hover:bg-white/10 transition-colors text-gray-400 hover:text-blue-400">
+                        <HelpCircle size={16} />
+                    </button>
+                </Tooltip>
+
                 <Tooltip content="System Settings" position="bottom-left">
-                    <button onClick={onOpenSettings} className="p-2 rounded-md hover:bg-blue-500/20 transition-colors text-gray-400">
+                    <button onClick={onOpenSettings} className="p-2 rounded-md hover:bg-blue-500/20 transition-colors text-gray-400 tour-settings-btn">
                         <Settings size={16} />
                     </button>
                 </Tooltip>

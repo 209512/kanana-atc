@@ -51,7 +51,6 @@ export const LogItem = React.memo(({ log, displayMessage, isDark, showTimestamp 
 
     const handleCopy = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
-        // NOTE: Mask UUID when copying to clipboard
         const safeMessageToCopy = typeof messageToRender === 'string' ? messageToRender.replace(
             /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g, 
             '[HIDDEN_ID]'
@@ -69,14 +68,11 @@ export const LogItem = React.memo(({ log, displayMessage, isDark, showTimestamp 
     }, []);
 
     const renderTextWithBadges = (text: string) => {
-        // NOTE: Regex for CONDITION, RISK_LEVEL, STRATEGY, UUID
-        // NOTE: Mask UUID to prevent exposure
         const badgeRegex = /(\[CONDITION:[^\]]+\]|\[RISK_LEVEL:[^\]]+\]|\[STRATEGY:[^\]]+\]|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/g;
         
         const parts = text.split(badgeRegex);
         
         return parts.map((part, index) => {
-            // NOTE: UUID masking
             if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(part)) {
                 return <span key={index} className="inline align-middle text-gray-500 italic">[HIDDEN_ID]</span>;
             }
@@ -155,7 +151,6 @@ export const LogItem = React.memo(({ log, displayMessage, isDark, showTimestamp 
             {showTimestamp && <span className="opacity-30 font-mono shrink-0 select-none text-[0.85em] mt-0.5">{timeStr}</span>}
             <span className={clsx("font-mono font-black shrink-0 select-none mt-0.5 min-w-[35px]", style.className)}>{style.tag}</span>
 
-            {/* Selectable text for copy-paste */}
             <div data-testid="log-message" 
                 className="font-mono flex-1 tracking-tight break-words whitespace-pre-wrap leading-relaxed select-text overflow-hidden relative transition-all"
                 style={{ fontSize: compact ? '9px' : `${terminalFontSize}px` }}
@@ -182,10 +177,10 @@ export const LogItem = React.memo(({ log, displayMessage, isDark, showTimestamp 
                                         log.type === 'insight' ? "bg-sky-500/20 text-sky-400" : "bg-amber-500/20 text-amber-400"
                                     )}>{children}</strong>
                                 ),
-                                a: ({ node, ...props }) => (
+                                a: ({ ...props }) => (
                                     <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300 transition-colors" />
                                 ),
-                                img: () => null // NOTE: Block external image loading for security
+                                img: () => null
                             }}
                         >
                             {typeof messageToRender === 'string' ? messageToRender.replace(/\n\s*\n/g, '\n') : ''}
@@ -194,7 +189,6 @@ export const LogItem = React.memo(({ log, displayMessage, isDark, showTimestamp 
                 ) : (
                     <span className="inline leading-snug">{typeof messageToRender === 'string' ? renderTextWithBadges(messageToRender) : messageToRender}</span>
                 )}
-                {/* Typing Cursor indicator if the log is recent and still receiving chunks. */}
                 {isTyping && (
                     <span className="inline-block w-1.5 h-3 ml-1 bg-current animate-pulse align-middle opacity-70"></span>
                 )}

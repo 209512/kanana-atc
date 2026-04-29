@@ -53,6 +53,7 @@ const App = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isStarted, setIsStarted] = useState(false);
   const openKananaKeyModal = useUIStore(s => s.openKananaKeyModal);
+  const setStartupMode = useUIStore(s => s.setStartupMode);
   const riskLevel = useATCStore(s => s.riskScore || 0);
 
   useOfflineArchive(); 
@@ -68,8 +69,6 @@ const App = () => {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
-    // NOTE: Pre-fetch OCR model in background
     setTimeout(() => {
       ocrService.init().catch(e => console.error('Failed to pre-fetch OCR:', e));
     }, 3000); // 3 seconds delay to avoid blocking initial critical UI rendering
@@ -94,7 +93,10 @@ const App = () => {
 
         <div className="flex flex-col gap-4 w-full max-w-md px-6 z-10">
           <button
-            onClick={() => setIsStarted(true)}
+            onClick={() => {
+              setStartupMode('simulation');
+              setIsStarted(true);
+            }}
             className="w-full px-6 py-4 bg-cyan-500/10 border-2 border-cyan-500 hover:bg-cyan-500 hover:text-[#05090a] transition-all duration-300 text-sm md:text-base font-bold tracking-wider relative group overflow-hidden"
           >
             <span className="relative z-10">SIMULATION MODE</span>
@@ -102,8 +104,9 @@ const App = () => {
           </button>
           <button
             onClick={() => {
+              setStartupMode('connect');
+              openKananaKeyModal();
               setIsStarted(true);
-              queueMicrotask(() => openKananaKeyModal());
             }}
             className="w-full px-6 py-4 bg-cyan-500/10 border-2 border-cyan-500 hover:bg-cyan-500 hover:text-[#05090a] transition-all duration-300 text-sm md:text-base font-bold tracking-wider relative group overflow-hidden"
           >
@@ -123,7 +126,6 @@ const App = () => {
         isDark ? "bg-[#05090a] text-gray-300" : "bg-[#f1f5f9] text-slate-800",
         riskLevel > 85 && "emergency-pulse" 
       )}>
-        {/* Offline Banner */}
         {isOffline && (
           <div className="absolute top-0 left-0 w-full bg-red-600 text-white text-xs font-bold py-1.5 flex items-center justify-center gap-2 z-[9999] shadow-lg animate-pulse">
             <WifiOff size={14} />
@@ -131,12 +133,10 @@ const App = () => {
           </div>
         )}
 
-        {/* 1. Main View */}
         <div className="absolute inset-0 bg-[#050505]">
           <Dashboard />
         </div>
         
-        {/* 2. Right Sidebar */}
         <div className="absolute top-0 right-0 bottom-0 z-50 h-full pointer-events-none">
           <div className="pointer-events-auto h-full shadow-2xl">
             <SidebarContainer />

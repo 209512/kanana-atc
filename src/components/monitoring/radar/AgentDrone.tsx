@@ -29,8 +29,6 @@ interface AgentDroneProps {
         terminateAgent: (id: string) => void;
     };
 }
-
-// NOTE: Helper function to safely convert values to numbers
 const getSafeNumber = (val: any, fallback: number): number => {
     const num = Number(val);
     return isNaN(num) ? fallback : num;
@@ -38,12 +36,11 @@ const getSafeNumber = (val: any, fallback: number): number => {
 
 export const AgentDrone = React.memo(({ 
     agent, isLocked, isOverride, isGlobalStopped, isForced, isAiProposed,
-    isAdminMuted, onClick, compact = false, actions
+    isAdminMuted, onClick, compact: _compact = false, actions: _actions
 }: AgentDroneProps) => {
     const groupRef = useRef<THREE.Group>(null);
     const selectedAgentId = useUIStore(s => s.selectedAgentId);
     const isDark = useUIStore(s => s.isDark);
-    const setSelectedAgentId = useUIStore(s => s.setSelectedAgentId);
     const { playSuccess } = useAudio(isAdminMuted);
 
     const isSelected = selectedAgentId === agent.id;
@@ -65,8 +62,6 @@ export const AgentDrone = React.memo(({
         if (isLocked && !prevLocked.current) playSuccess();
         prevLocked.current = isLocked;
     }, [isLocked, playSuccess]);
-
-    // NOTE: Memory leak prevention - dispose geometries and materials on unmount
     useEffect(() => {
         return () => {
             if (groupRef.current) {
@@ -86,8 +81,6 @@ export const AgentDrone = React.memo(({
             }
         };
     }, []);
-
-    // NOTE: Memory leak prevention for dots
     useEffect(() => {
         return () => {
             if (dotsGroupRef.current) {
@@ -120,24 +113,16 @@ export const AgentDrone = React.memo(({
         if (!groupRef.current) return;
         
         if (!isPaused) {
-            // NOTE: Skip large delta times to prevent drones moving too fast (e.g., background tab)
             if (delta < 0.1) {
                 accumulatedTime.current += delta;
-                
-                // NOTE: Orbit speed proportional to baseLoad
                 const safeLoad = getSafeNumber(agent.metrics?.load, 30);
                 const loadFactor = safeLoad / 100; // 0.1 ~ 1.0
                 const baseSpeed = 0.15 + (loadFactor * 0.15); // 0.15 ~ 0.30
                 const speedNoise = Math.cos(accumulatedTime.current * 0.5 + safeSeed) * 0.05;
                 const direction = (safeSeed % 2 === 0) ? 1 : -1;
-                
-                // NOTE: Add delta * speed instead of total time to prevent orbit jumps on Load change
                 currentAngle.current += delta * (baseSpeed + speedNoise) * direction;
             }
         }
-        
-        // NOTE: Seed-based noise for natural orbit and dispersion
-        // NOTE: Spread radius to 5.0~20.0 instead of clustering in center
         const baseRadius = 6 + (safeSeed % 15);
         const radiusNoise = Math.sin(accumulatedTime.current * 0.5 + safeSeed) * 1.5;
         const radius = baseRadius + radiusNoise;
@@ -145,7 +130,6 @@ export const AgentDrone = React.memo(({
         const angle = currentAngle.current;
         
         const targetX = Math.cos(angle) * radius;
-        // NOTE: Add irregularity to y-axis (altitude)
         const yNoise = Math.sin(accumulatedTime.current * 0.8 + safeSeed * 2) * 2.0;
         const safeIndex = getSafeNumber(agent.index, 0);
         const targetY = ((safeIndex % 4) - 1.5) * 1.5 + yNoise;
@@ -159,12 +143,8 @@ export const AgentDrone = React.memo(({
             const lerpFactor = isResuming.current ? RADAR_CONFIG.DRONE.LERP_RESUMING : RADAR_CONFIG.DRONE.LERP_NORMAL;
             groupRef.current.position.lerp(targetVec.current, lerpFactor);
             groupRef.current.rotation.y += isForced ? RADAR_CONFIG.DRONE.ROTATION_FORCED : (isAiProposed ? RADAR_CONFIG.DRONE.ROTATION_AI : RADAR_CONFIG.DRONE.ROTATION_SPEED);
-            
-            // NOTE: Fine noise for wind-blown hovering effect
             const hoverNoise = Math.sin(accumulatedTime.current * 2.0 + safeSeed) * 0.015;
             groupRef.current.position.y += Math.sin(accumulatedTime.current * 0.8) * 0.0015 + hoverNoise;
-            
-            // NOTE: Fine turbulence noise on z-axis
             const windNoiseZ = Math.cos(accumulatedTime.current * 1.5 + safeSeed) * 0.008;
             groupRef.current.position.z += windNoiseZ;
         }

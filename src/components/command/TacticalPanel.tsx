@@ -71,7 +71,6 @@ export const TacticalPanel = () => {
                 )}
                 style={!isMobile ? { right: safeSidebarWidth + 20 } : undefined}>
                 
-                {/* Header Area */}
                 <div className={clsx("p-3 border-b flex justify-between items-center tactical-handle cursor-move select-none shrink-0 tactical-panel-container", 
                     isDark ? "bg-gray-800/20 border-gray-800" : "bg-white/40 border-slate-200/40")}>
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] font-mono">
@@ -92,7 +91,6 @@ export const TacticalPanel = () => {
 
                 {isOpen && (
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2 pb-2">
-                        {/* Control Group */}
                         <div className="flex items-stretch gap-1 mb-2 h-11 shrink-0">
                             <Tooltip content={globalStop ? "Resume All" : "Halt All"} position="bottom" className="flex-1">
                                 <button onClick={toggleGlobalStop}
@@ -113,7 +111,6 @@ export const TacticalPanel = () => {
                             </Tooltip>
                         </div>
 
-                        {/* Filter Area */}
                         <div className="flex p-0.5 rounded bg-black/10 border border-gray-500/10 mb-2">
                             <Tooltip content="Show all detected nodes" position="bottom" className="flex-1">
                                 <button onClick={() => setFilterMode('all')} 
