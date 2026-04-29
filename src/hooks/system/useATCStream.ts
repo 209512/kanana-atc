@@ -16,7 +16,6 @@ const getStreamUrl = () => {
 export const useATCStream = () => {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const autoTriggerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // NOTE: Timestamp-based watermark to prevent GC race conditions completely
   const lastProcessedLogTimestampRef = useRef<number>(0); 
   const dataBuffer = useRef<{ agents: BufferedAgent[] | null, state: BufferedState | null }>({ agents: null, state: null });
   const workerRef = useRef<Worker | null>(null);
@@ -24,106 +23,96 @@ export const useATCStream = () => {
   const lastAutoTriggerRef = useRef<number>(0);
   const lastFlushTimeRef = useRef<number>(0);
 
-  // NOTE: Initialize Web Worker
   useEffect(() => {
     workerRef.current = new Worker(new URL('../../workers/streamWorker.ts', import.meta.url), { type: 'module' });
     
-    // NOTE: Receive processed results and update store
     workerRef.current.onmessage = (event: MessageEvent) => {
       const { type, payload } = event.data;
 
       if (type === 'STREAM_PROCESSED') {
-        const store = useATCStore.getState();
         const { agents, state, locksToDelete } = payload as {
           agents: Agent[] | null;
           state: ATCState | null;
           locksToDelete: { uuid: string; field: string }[];
         };
         
-        if (agents) {
-          store.setAgents(() => {
-            // NOTE: Re-apply optimistic UI field locks to prevent flickering
-            // NOTE: Prevent deleted agents from reappearing from worker state
-            // NOTE: Filter out agents deleted in main thread
-            const deletedIds = store.deletedIds;
-            return agents.map(workerAgent => {
-              const originalId = String(workerAgent.uuid || workerAgent.id);
-              const locks = store.fieldLocks.get(originalId);
-              if (locks) {
-                const newAgent = { ...workerAgent };
+        useATCStore.setState((s) => {
+          const next: Record<string, unknown> = {};
+
+          if (agents) {
+            const deletedIds = s.deletedIds;
+            const fieldLocks = s.fieldLocks;
+            next.agents = agents
+              .map((workerAgent) => {
+                const originalId = String(workerAgent.uuid || workerAgent.id);
+                const locks = fieldLocks.get(originalId);
+                if (!locks) return workerAgent;
+                const newAgent = { ...workerAgent } as Record<string, unknown>;
                 locks.forEach((lock, field) => {
-                  (newAgent as Record<string, unknown>)[field] = lock.value;
+                  newAgent[field] = lock.value;
                 });
-                return newAgent;
-              }
-              return workerAgent;
-            }).filter(a => !deletedIds.has(String(a.uuid || a.id))); // Ensure deleted agents stay dead
-          });
-        }
-        if (state) {
-          store.setState((prev) => {
-            // NOTE: Prioritize client-side pendingProposals over MSW state to prevent overwrite
-            const mergedProposals = prev.pendingProposals && prev.pendingProposals.size > 0
-                ? prev.pendingProposals 
-                : new Map();
+                return newAgent as unknown as Agent;
+              })
+              .filter((a) => !deletedIds.has(String(a.uuid || a.id)));
+          }
+
+          if (state) {
+            const prev = s.state;
+            const mergedProposals = prev.pendingProposals && prev.pendingProposals.size > 0 ? prev.pendingProposals : new Map();
 
             const uniqueMap = new Map<string, LogEntry>();
             (state.logs || []).forEach((l: LogEntry) => uniqueMap.set(l.id, l));
             (prev.logs || []).forEach((l: LogEntry) => {
-               if (String(l.id).startsWith('ui-') || String(l.id).startsWith('LOG-')) {
-                   uniqueMap.set(l.id, l);
-               }
+              if (String(l.id).startsWith('ui-') || String(l.id).startsWith('LOG-')) {
+                uniqueMap.set(l.id, l);
+              }
             });
-            const mergedLogs = Array.from(uniqueMap.values())
-               .sort((a: LogEntry, b: LogEntry) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
-            
-            // NOTE: Optimize log slicing to prevent array creation overhead
+
+            const mergedLogs = Array.from(uniqueMap.values()).sort(
+              (a: LogEntry, b: LogEntry) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0)
+            );
             const maxLogs = ATC_CONFIG.LOGS?.MAX_DISPLAY || 1000;
             const finalLogs = mergedLogs.length > maxLogs ? mergedLogs.slice(-maxLogs) : mergedLogs;
 
-            const finalState = {
+            const finalState: Record<string, unknown> = {
               ...state,
-              // NOTE: Actually use the mergedProposals variable instead of strictly forcing prev.pendingProposals
               pendingProposals: mergedProposals,
-              logs: finalLogs
+              logs: finalLogs,
             };
 
-            const globalLocks = store.fieldLocks.get('SYSTEM_GLOBAL');
+            const globalLocks = s.fieldLocks.get('SYSTEM_GLOBAL');
             if (globalLocks) {
               globalLocks.forEach((lock, field) => {
-                (finalState as Record<string, unknown>)[field] = lock.value;
+                finalState[field] = lock.value;
               });
             }
 
-            return finalState as ATCState;
-          });
-        }
-        
-        // NOTE: Clean up expired locks from main thread
-        if (locksToDelete && locksToDelete.length > 0) {
-          useATCStore.setState((s) => {
-          const newFieldLocks = new Map((s as { fieldLocks: Map<string, Map<string, { value: unknown, expiry: number }>> }).fieldLocks);
-          locksToDelete.forEach(({ uuid, field }: { uuid: string, field: string }) => {
-            const agentLocks = new Map(newFieldLocks.get(uuid) || new Map());
-            if (agentLocks.has(field)) {
-              agentLocks.delete(field);
-              if (agentLocks.size === 0) {
-                newFieldLocks.delete(uuid);
-              } else {
-                newFieldLocks.set(uuid, agentLocks);
+            next.state = finalState as unknown as ATCState;
+          }
+
+          if (locksToDelete && locksToDelete.length > 0) {
+            const newFieldLocks = new Map(s.fieldLocks);
+            locksToDelete.forEach(({ uuid, field }) => {
+              const agentLocks = new Map(newFieldLocks.get(uuid) || new Map());
+              if (agentLocks.has(field)) {
+                agentLocks.delete(field);
+                if (agentLocks.size === 0) {
+                  newFieldLocks.delete(uuid);
+                } else {
+                  newFieldLocks.set(uuid, agentLocks);
+                }
               }
-            }
-          });
-          return { fieldLocks: newFieldLocks };
+            });
+            next.fieldLocks = newFieldLocks;
+          }
+
+          return next as unknown as Partial<typeof s>;
         });
-        }
         isWorkerBusy.current = false;
-        // NOTE: Flush buffer immediately after worker finishes to prevent UI rendering delays
         if (dataBuffer.current.agents || dataBuffer.current.state) {
           flushBuffer();
         }
       } else if (type === 'ERROR') {
-        // NOTE: Prevent silent worker failures by logging to main thread and releasing lock
         logger.error('[WORKER_ERROR]', payload?.error || 'Unknown Error');
         const store = useATCStore.getState();
         if (store.addLog) {
@@ -148,7 +137,6 @@ export const useATCStream = () => {
     const now = Date.now();
     
     const store = useATCStore.getState();
-    // NOTE: Serialize lock data for Worker postMessage
     const serializedFieldLocks = Array.from(store.fieldLocks.entries()).map(([uuid, fields]) => [
       uuid, 
       Array.from(fields.entries()).map(([key, lockObj]) => [key, { value: lockObj.value, expiry: lockObj.expiry }])
@@ -178,7 +166,6 @@ export const useATCStream = () => {
         try {
           const data = JSON.parse(event.data);
           if (data.agents) {
-            // NOTE: Merge agents using Map to prevent dropping intermittent updates while worker is busy
             const existingAgents = dataBuffer.current.agents || [];
             const newAgents = data.agents || [];
             const mergedAgentsMap = new Map();
@@ -187,65 +174,67 @@ export const useATCStream = () => {
             dataBuffer.current.agents = Array.from(mergedAgentsMap.values());
           }
           if (data.state) {
-            // NOTE: Merge logs based on ID to prevent data loss
             const existingLogs = dataBuffer.current.state?.logs || [];
             const newLogs = data.state.logs || [];
             const mergedMap = new Map<string, LogEntry>();
             existingLogs.forEach((l: unknown) => { const log = l as LogEntry; mergedMap.set(log.id, log); });
             newLogs.forEach((l: unknown) => { const log = l as LogEntry; mergedMap.set(log.id, log); });
             
-            // NOTE: Sort logs by timestamp before slicing to prevent data loss on network jitter
             const mergedLogs = Array.from(mergedMap.values())
                .sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0))
-               .slice(-1000);
+               .slice(-(ATC_CONFIG.LOGS?.MAX_DISPLAY || 1000));
             
             dataBuffer.current.state = {
               ...data.state,
               logs: mergedLogs
             };
 
-            // NOTE: Event-Driven Auto-Trigger Logic
             const store = useATCStore.getState();
             if (store.isAiMode && store.isAiAutoMode && newLogs.length > 0) {
               
-              // NOTE: Process logs exactly once via timestamp watermark
               const unprocessedConditions = newLogs.filter(
                 (log: LogEntry) => {
                   const isCondition = log.message && log.message.includes('[CONDITION:') && log.type !== 'policy';
-                  return isCondition && log.timestamp > lastProcessedLogTimestampRef.current;
+                  const ts = typeof log.timestamp === 'number' ? log.timestamp : log.timestamp.getTime();
+                  return isCondition && ts > lastProcessedLogTimestampRef.current;
                 }
               );
               
               if (unprocessedConditions.length > 0) {
-                // NOTE: Parse timestamp to number before Math.max to prevent NaN
                 lastProcessedLogTimestampRef.current = Math.max(...unprocessedConditions.map((l: LogEntry) => Number(l.timestamp) || 0));
                 const now = Date.now();
-                // NOTE: Guardrail - Replace magic number 10000 with configurable cooldown to prevent rubber-banding
                 const cooldownMs = ATC_CONFIG.AI?.ANALYSIS_COOLDOWN_MS || 10000;
                 if (now - lastAutoTriggerRef.current > cooldownMs) {
                   lastAutoTriggerRef.current = now;
                   
-                  // NOTE: Auto-invoke Kanana-O
-                  const triggerCommand = `A new event has been detected in the system logs. Analyze the logs and take immediate action.`;
+                  const latest = unprocessedConditions[unprocessedConditions.length - 1];
+                  const conditionLine = String(latest?.message || '').slice(0, 300);
+                  const agentName = String(latest?.agentName || latest?.agentId || 'AGENT');
+
+                  const triggerCommand =
+                    `[AUTO_TRIGGER]\n` +
+                    `[DETECTED_LOG] ${agentName} ${conditionLine}\n` +
+                    `자동 관제 이벤트가 감지되었습니다. 아래 조건을 기준으로 즉시 분석 및 조치하십시오.\n` +
+                    `- 로그에 [CONDITION:] 또는 [RISK_LEVEL:]가 존재하면 이를 최우선으로 반영하십시오.\n` +
+                    `- <THOUGHT>, <PREDICTION>, <REPORT>, <ACTIONS> 4개 섹션을 반드시 포함하십시오.\n` +
+                    `- 조치가 필요하면 <ACTIONS>에는 반드시 유효한 JSON 배열로 1개 이상 액션을 포함하십시오.\n` +
+                    `- 조치가 불필요하면 <ACTIONS>[]</ACTIONS>로 명시하십시오.`;
                   
                   if (store.addLog) {
                     store.addLog("🚨 EVENT_TRIGGER: Auto-invoking Kanana-O for incident response...", "system", "SYSTEM");
                   }
                   
-                  // NOTE: Add slight delay to ensure UI renders before analysis
+                  if (autoTriggerTimeoutRef.current) clearTimeout(autoTriggerTimeoutRef.current);
                   autoTriggerTimeoutRef.current = setTimeout(() => {
-                    // NOTE: Dispatch event to queue analysis if already running
                     window.dispatchEvent(new CustomEvent('AUTO_ANALYZE_TRIGGER', { detail: triggerCommand }));
-                  }, 500);
+                  }, ATC_CONFIG.SIMULATOR.AUTO_ANALYZE_DELAY_MS);
                 }
               }
             }
           }
-          // NOTE: Process buffer when worker is idle
           if (!isWorkerBusy.current) {
-            if (Date.now() - lastFlushTimeRef.current > 100) {
+            if (Date.now() - lastFlushTimeRef.current > ATC_CONFIG.SIMULATOR.STREAM_FLUSH_THROTTLE_MS) {
               lastFlushTimeRef.current = Date.now();
-              // NOTE: Prevent render queue flooding when tab is inactive
               if (typeof window !== 'undefined') {
                 requestAnimationFrame(flushBuffer);
               } else {
@@ -254,23 +243,17 @@ export const useATCStream = () => {
             }
           }
         } catch (err) { 
-          // NOTE: Only log non-empty lines to prevent noisy parsing errors
-          if (dataStr) {
-              logger.error("Stream Parsing Error:", err, "Raw Data:", dataStr);
-          }
-          // NOTE: If stream data is corrupted, we might want to force a reconnect or just skip the bad chunk
-          // NOTE: For now, we skip the bad chunk
+          logger.error("Stream Parsing Error:", err, "Raw Data:", event.data);
         }
       };
-      eventSource.onerror = (e) => {
-        // NOTE: Prevent infinite reconnect loops on stream closure
+      eventSource.onerror = () => {
         if (eventSource) {
             eventSource.close();
             eventSource = null;
         }
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         if (autoTriggerTimeoutRef.current) clearTimeout(autoTriggerTimeoutRef.current);
-        reconnectTimeoutRef.current = setTimeout(connect, 5000);
+        reconnectTimeoutRef.current = setTimeout(connect, ATC_CONFIG.SIMULATOR.STREAM_RECONNECT_MS);
       };
     };
     connect();

@@ -4,6 +4,7 @@ import { Brain, Bot } from 'lucide-react';
 import { Tooltip } from '@/components/common/Tooltip';
 import { useATCStore } from '@/store/useATCStore';
 import { useUIStore } from '@/store/useUIStore';
+import { SECURE_STORAGE_KEYS } from '@/utils/secureStorage';
 
 interface AIControlGroupProps {
     variant?: 'sidebar' | 'tactical';
@@ -22,7 +23,7 @@ export const AIControlGroup = ({ variant = 'tactical', isCompact = false }: AICo
     const handleModeToggle = () => {
         playClick?.();
         if (!isAiMode) {
-            const kananaKey = sessionStorage.getItem('KANANA_API_KEY') || localStorage.getItem('KANANA_API_KEY');
+            const kananaKey = sessionStorage.getItem(SECURE_STORAGE_KEYS.KANANA_API_KEY) || localStorage.getItem(SECURE_STORAGE_KEYS.KANANA_API_KEY);
             if (!kananaKey) {
                 openKananaKeyModal();
                 return;
@@ -34,7 +35,7 @@ export const AIControlGroup = ({ variant = 'tactical', isCompact = false }: AICo
     const handleToggleAutoMode = () => {
         playClick?.();
         if (!isAiMode) {
-            const kananaKey = sessionStorage.getItem('KANANA_API_KEY') || localStorage.getItem('KANANA_API_KEY');
+            const kananaKey = sessionStorage.getItem(SECURE_STORAGE_KEYS.KANANA_API_KEY) || localStorage.getItem(SECURE_STORAGE_KEYS.KANANA_API_KEY);
             if (!kananaKey) {
                 openKananaKeyModal();
                 return;
