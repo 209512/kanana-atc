@@ -30,7 +30,5 @@ test('Should render AgentCard with correct agent information', async ({ mount })
       />
     </Reorder.Group>
   );
-
-  // NOTE: Verify mounting without crashing
   await expect(component).toBeVisible();
 });
