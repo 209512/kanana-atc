@@ -29,9 +29,6 @@ export const useAutonomy = (state: ATCState, agents: Agent[], addLog: any) => {
     const now = Date.now();
     if (now - lastActionTimestamp.current < RISK.COOL_DOWN_MS || lastActionTimestamp.current === 0) return false;
     if (now - lastActionTimestamp.current > RISK.TREND_MAX_AGE) return false;
-
-    
-    // NOTE: Calculate trend based on the latest riskScore
     const currentHistory = [...riskHistory.current, riskScore];
 
     if (currentHistory.length >= RISK.TREND_WINDOW) {
@@ -63,8 +60,6 @@ export const useAutonomy = (state: ATCState, agents: Agent[], addLog: any) => {
       if (riskHistory.current.length > RISK.HISTORY_LIMIT) riskHistory.current.shift();
     }
   }, [riskScore, RISK.HISTORY_LIMIT]);
-
-  // NOTE: Sync riskScore with global store (MSW mode)
   useEffect(() => {
     if (import.meta.env.VITE_USE_MSW === 'true') {
       const msw = (window as any).msw;

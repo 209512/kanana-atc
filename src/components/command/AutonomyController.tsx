@@ -27,7 +27,6 @@ export const AutonomyController: React.FC = () => {
           }`}
           style={{ width: `${autonomyLevel}%` }}
         />
-        {/* Threshold Markers */}
         <div className="absolute left-[80%] top-0 h-full w-0.5 bg-white/20" />
       </div>
 

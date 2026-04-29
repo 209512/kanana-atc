@@ -1,4 +1,3 @@
-import i18n from '@/i18n';
 import { logger } from './logger';
 import { useATCStore } from '@/store/useATCStore';
 
@@ -64,9 +63,6 @@ export const aiParser = {
       }
       
       content = text.substring(contentStart, endIndex).trim();
-      
-      
-      // NOTE: Strip trailing JSON closing braces and quotes
       content = content.replace(/["\s,}]+$/, "").trim();
 
       
@@ -92,24 +88,16 @@ export const aiParser = {
     
     return content || '';
   },
-
-  // NOTE: Parse actions via regex to prevent ReDoS and improve accuracy
   parseActions(text: string, commonReason: string = "AI Strategic Decision"): ParsedAction[] {
     let jsonString = "";
-    
-    // NOTE: Extract from <ACTIONS> tag if exists
     const actionsMatch = text.match(/<ACTIONS>([\s\S]*?)<\/ACTIONS>/i) || text.match(/\[ACTIONS\]([\s\S]*?)(?:\[\w+\]|$)/i);
     const searchArea = actionsMatch ? actionsMatch[1] : text;
-
-    // NOTE: Extract valid JSON array syntax non-greedily
     const jsonArrayRegex = /\[\s*\{[\s\S]*?\}\s*\]/g;
     const matches = [...searchArea.matchAll(jsonArrayRegex)];
     
     if (matches && matches.length > 0) {
-      // NOTE: Trust the last matched JSON array
       jsonString = matches[matches.length - 1][0];
     } else {
-      // NOTE: Fallback to indexOf extraction
       const startIndex = searchArea.indexOf('[');
       const endIndex = searchArea.lastIndexOf(']');
       if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
@@ -142,8 +130,6 @@ export const aiParser = {
         if (!VALID_COMMANDS.includes(action)) return null;
 
         const targetRaw = item.targetId || item.target || item.id || item.target_id;
-        
-        // NOTE: Remove "Recon-" or "Agent-" prefixes if present to extract pure name
         let cleanTargetId = targetRaw ? String(targetRaw).toUpperCase() : undefined;
         if (cleanTargetId) {
             cleanTargetId = cleanTargetId.replace(/^(RECON|AGENT)-?/i, '');

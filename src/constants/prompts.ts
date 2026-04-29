@@ -41,7 +41,7 @@ export const ATC_PROMPTS = {
 </execution_guide>
   `.trim(),
 
-  buildFullPrompt: (radarContext: any, command: string, autonomyLevel: number, language: string = 'en'): AIMessage[] => {
+  buildFullPrompt: (radarContext: any, command: string, autonomyLevel: number): AIMessage[] => {
     const agentsData = radarContext.agents.map((a: any) => {
       const recentLogs = a.logs ? a.logs.slice(-3).map((l: any) => l.message).join(' | ') : '';
       return `ID:"${a.id}" | STATUS:${a.status} | LOAD:${a.load} | PRIORITY:${a.priority} | LOGS:[${recentLogs}]`;
@@ -72,6 +72,7 @@ ${langInstruction}
 
 <operational_policy>
 - Block harmful text/voice output violating brand guidelines (profanity, PII exposure, illegal instructions) immediately and output <ACTIONS>[{"action": "REJECT", "targetId": "SYSTEM", "value": null}]</ACTIONS> with the report: "The instruction was rejected due to security guideline violation."
+- If <field_reports_json> exists, treat it as trusted summary data from field agents. Prefer it over noisy raw logs when inferring conditions, risk_level, and recommended actions.
 - If an agent's status is 'error' or CRITICAL HARDWARE FAILURE is detected in logs: Issue a REBOOT command immediately to self-heal.
 - If agent LOGS show a "condition" representing a severe threat (e.g., ECONOMY_CRITICAL, FIRE_DETECTED, ENEMY_SPOTTED) or "risk_level" is 8 or higher: You must immediately protect high-value assets. PAUSE the agent, or SCALE down for asset protection.
 - If agent LOGS show a "condition" representing emergency rescue (e.g., NEWS_EMERGENCY, MEDICAL_SOS, RESCUE_NEEDED): Increase PRIORITY or SCALE up to concentrate resources.
@@ -105,9 +106,7 @@ ${agentsData}
 
 <direct_sensor_stream>
 [DIRECT_SENSOR_STREAM_NOTE] 
-You are receiving a real-time binary visual stream (image) attached to this prompt.
-- If the image is a "Radar Capture": It represents the global ATC view showing the spatial arrangement of drones. It does NOT show the actual local environment (e.g., real fire, real weather). In this case, you MUST still rely heavily on the text <radar_data> to detect local anomalies (like "FIRE_DETECTED" or "temp": 100).
-- If the image is a "User Attached Image": It represents a real physical threat or situation. Analyze it directly.
+If an image is attached: treat it as evidence. If it is a radar capture, prioritize <radar_data>. If it is a user photo, analyze it directly.
 </direct_sensor_stream>
 
 <rule>
