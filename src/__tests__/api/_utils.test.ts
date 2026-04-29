@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { checkRateLimit, isIpBanned, getClientIp } from '../../../api/_utils';
-
-// NOTE: Mock process.env
+import { checkRateLimit, isIpBanned } from '../../../api/_utils';
 const originalEnv = process.env;
-
-// NOTE: Mock the logger to avoid polluting console during tests
 vi.mock('./_logger', () => ({
   logger: {
     warn: vi.fn(),
@@ -16,7 +12,6 @@ describe('Rate Limiter & IP Ban (Edge Cases)', () => {
   beforeEach(() => {
     vi.resetModules();
     process.env = { ...originalEnv, UPSTASH_REDIS_REST_URL: 'https://mock.redis', UPSTASH_REDIS_REST_TOKEN: 'mock-token' };
-    // NOTE: Clear global mocks
     global.fetch = vi.fn();
   });
 
@@ -29,22 +24,16 @@ describe('Rate Limiter & IP Ban (Edge Cases)', () => {
     it('should fallback to in-memory if Redis responds with undefined currentCount', async () => {
       process.env.UPSTASH_REDIS_REST_URL = 'http://fake-redis.com';
       process.env.UPSTASH_REDIS_REST_TOKEN = 'fake-token';
-
-      // NOTE: First two requests fallback to memory and increment
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => [{ result: undefined }], // Redis error / unexpected payload
       });
       global.fetch = mockFetch;
-
-      // NOTE: In-memory rate limiter logic correctly falls back
       const result1 = await checkRateLimit('user-fallback', 2, '127.0.0.1');
       expect(result1).toBe(true);
 
       const result2 = await checkRateLimit('user-fallback', 2, '127.0.0.1');
       expect(result2).toBe(true);
-
-      // NOTE: In-memory rate limiter now blocks on the 3rd request since max is 2
       const result3 = await checkRateLimit('user-fallback', 2, '127.0.0.1');
       expect(result3).toBe(false);
     });
@@ -52,8 +41,6 @@ describe('Rate Limiter & IP Ban (Edge Cases)', () => {
     it('should use Redis correctly when valid data is returned', async () => {
       process.env.UPSTASH_REDIS_REST_URL = 'http://fake-redis.com';
       process.env.UPSTASH_REDIS_REST_TOKEN = 'fake-token';
-
-      // NOTE: First call returns 3 (which is > maxRequests)
       const mockFetch = vi.fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -72,8 +59,6 @@ describe('Rate Limiter & IP Ban (Edge Cases)', () => {
     it('should handle Redis failure gracefully', async () => {
       process.env.UPSTASH_REDIS_REST_URL = 'http://fake-redis.com';
       process.env.UPSTASH_REDIS_REST_TOKEN = 'fake-token';
-
-      // NOTE: Redis fetch throws an error
       const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
       global.fetch = mockFetch;
 

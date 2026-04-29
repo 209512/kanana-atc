@@ -29,16 +29,13 @@ describe('ErrorBoundary & Store Reset', () => {
   });
 
   it('should reset Zustand stores when reset is triggered', () => {
-    let thrown = false;
-    
     const handleReset = () => {
       
       useATCStore.setState({ isAiMode: false, agents: [] });
       useUIStore.setState({ isDark: false });
-      thrown = false;
     };
 
-    const { rerender } = render(
+    render(
       <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
         <Bomb shouldThrow={true} />
       </ErrorBoundary>

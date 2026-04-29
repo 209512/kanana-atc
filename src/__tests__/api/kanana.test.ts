@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import handler from '../../../api/kanana';
 import * as utils from '../../../api/_utils';
 
-
 global.fetch = vi.fn() as any;
 
 describe('Kanana Server API - Error Handling', () => {
@@ -15,9 +14,7 @@ describe('Kanana Server API - Error Handling', () => {
 
     vi.spyOn(utils, 'getAllowedOrigins').mockReturnValue(['https://kanana-atc.vercel.app']);
     vi.spyOn(utils, 'verifyAuthToken').mockResolvedValue({ valid: true, payload: { jti: 'test' } });
-    // NOTE: Mock isIpBanned to pass the middleware
     vi.spyOn(utils, 'isIpBanned').mockResolvedValue(false);
-    // NOTE: Mock checkRateLimit to pass the middleware
     vi.spyOn(utils, 'checkRateLimit').mockResolvedValue(true);
   });
 
